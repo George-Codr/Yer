@@ -49,9 +49,12 @@ jobs:
           "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
           tar -xzf compression-libs-aarch64-android.tar.gz -C $GITHUB_WORKSPACE/android-libs/aarch64-linux-android --strip-components=1
 
-      - name: Verify unpacked files
+      - name: Verify unpacked files and set lib paths
         run: |
           find $GITHUB_WORKSPACE/android-libs/aarch64-linux-android
+          echo "CPPFLAGS=-I$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Checkout python/cpython (branch 3.13)
         uses: actions/checkout@v4
@@ -108,5 +111,8 @@ jobs:
         working-directory: cpython/Android
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          CPPFLAGS: ${{ env.CPPFLAGS }}
+          LDFLAGS: ${{ env.LDFLAGS }}
+          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
         run: |
           ./android.py ci aarch64-linux-android
