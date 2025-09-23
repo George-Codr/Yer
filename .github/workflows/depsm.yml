@@ -56,6 +56,8 @@ jobs:
             -DCMAKE_ANDROID_API=$API \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=$PWD/../android-libs/aarch64-linux-android \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DZLIB_BUILD_EXAMPLES=OFF \
             -G Ninja
           cmake --build . --config Release
           cmake --install .
@@ -66,9 +68,9 @@ jobs:
           curl -L https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz -o bzip2.tar.gz
           tar -xzf bzip2.tar.gz
           cd bzip2-1.0.8
-          # Modify Makefile to skip tests and set installation prefix
-          sed -i 's/all: $(OBJS) bzip2 bzip2recover test/all: $(OBJS) bzip2 bzip2recover/g' Makefile
-          make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android
+          # Modify Makefile to skip tests
+          sed -i 's/all: libbz2.a bzip2 bzip2recover test/all: libbz2.a bzip2 bzip2recover/' Makefile
+          make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android all
           make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android install
 
       # ────────────── xz (standard lzma) ──────────────
@@ -81,6 +83,8 @@ jobs:
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android \
             --disable-shared --enable-static --with-pic \
+            --disable-xz --disable-xzdec --disable-tests \
+            --disable-lzmadec --disable-scripts \
             CC="$CC" AR="$AR" RANLIB="$RANLIB"
           make
           make install
@@ -94,23 +98,11 @@ jobs:
           ./configure \
             --host=aarch64-linux-android \
             --prefix=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android \
+            --disable-dependency-tracking \
+            --disable-testing \
             CC="$CC" AR="$AR" RANLIB="$RANLIB" \
             CPPFLAGS="-I$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/include" \
             LDFLAGS="-L$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib"
-          make
-          make install
-
-      # ────────────── xz (LZMA) ──────────────
-      - name: Build xz (LZMA)
-        run: |
-          curl -L https://tukaani.org/xz/xz-5.2.10.tar.gz -o xz.tar.gz
-          tar -xzf xz.tar.gz
-          cd xz-5.2.10
-          ./configure \
-            --host=aarch64-linux-android \
-            --prefix=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android \
-            --disable-shared --enable-static --with-pic \
-            CC="$CC" AR="$AR" RANLIB="$RANLIB"
           make
           make install
 
