@@ -74,6 +74,7 @@ jobs:
           curl -L 'https://raw.githubusercontent.com/plfj/py-build/7f18a2a580e6cb495c11c9cab220e9ab1b37c1ef/as13.patch' -o as13.patch
           git apply as13.patch
 
+
       - name: Set up Python 3
         uses: actions/setup-python@v5
         with:
@@ -111,8 +112,23 @@ jobs:
         working-directory: cpython/Android
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          CPPFLAGS: ${{ env.CPPFLAGS }}
-          LDFLAGS: ${{ env.LDFLAGS }}
-          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          # Only set these for TARGET builds, not host tools
+          CPPFLAGS: ""  # Clear for host tools build
+          LDFLAGS: ""   # Clear for host tools build  
+          PKG_CONFIG_PATH: ""  # Clear for host tools build
         run: |
+          set -e
+          # Build host tools first without Android flags
+          echo "Building host tools..."
+          export CPPFLAGS=""
+          export LDFLAGS=""
+          export PKG_CONFIG_PATH=""
+          ./android.py build-host-tools  # If such target exists
+          
+          # Then build Android target with Android flags
+          echo "Building Android target..."
+          export CPPFLAGS="${{ env.CPPFLAGS }}"
+          export LDFLAGS="${{ env.LDFLAGS }}"
+          export PKG_CONFIG_PATH="${{ env.PKG_CONFIG_PATH }}"
           ./android.py ci aarch64-linux-android
