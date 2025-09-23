@@ -1,4 +1,4 @@
-name: Android CI Cross-Build (aarch64-linux-android, macOS, NDK Clang)
+name: Android CI Cross-Build (aarch64-linux-android, macOS)
 
 on:
   workflow_dispatch:
@@ -14,48 +14,36 @@ jobs:
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_NDK_VERSION: "27.3.13750724"
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.3.13750724
-      TARGET_TRIPLE: "aarch64-linux-android"
-      API_LEVEL: 33
+      HOST: "aarch64-linux-android"
+      ANDROID_API_LEVEL: 21
 
     steps:
-      - name: Ensure basic tools
+      - name: Ensure Homebrew is installed
         run: |
-          brew install wget curl git cmake pkg-config autoconf automake libtool gnu-sed grep coreutils
+          if ! command -v brew &>/dev/null; then
+            echo "Homebrew not found. Installing..."
+            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          fi
+          brew update
 
-      - name: Download Android SDK command line tools
+      - name: Install GNU tools and dependencies
         run: |
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          wget -O sdk.zip "https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"
-          unzip -q sdk.zip -d "$ANDROID_HOME/cmdline-tools"
-          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-          rm sdk.zip
+          brew install coreutils gnu-sed wget curl git cmake pkg-config autoconf automake libtool
+          echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/llvm@17/bin" >> $GITHUB_PATH
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
 
-      - name: Accept licenses + install NDK
+      - name: Verify required tools
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platform-tools" "ndk;${ANDROID_NDK_VERSION}"
+          which sed
+          sed --version
+          which expr
+          expr 1 + 1
+          which llvm-profdata || true  # may not exist yet
 
-      - name: Add NDK Clang to PATH
-        run: |
-          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin/bin" >> $GITHUB_PATH
-          echo "NDK Clang added to PATH"
-
-      - name: Download and unpack compression libs
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/android-libs/aarch64-linux-android
-          wget -O compression-libs-aarch64-android.tar.gz \
-          "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
-          tar -xzf compression-libs-aarch64-android.tar.gz -C $GITHUB_WORKSPACE/android-libs/aarch64-linux-android --strip-components=1
-          find $GITHUB_WORKSPACE/android-libs/aarch64-linux-android
-
-      - name: Set lib paths
-        run: |
-          echo "CPPFLAGS=-I$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/include" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Checkout CPython branch
+      - name: Checkout python/cpython
         uses: actions/checkout@v4
         with:
           repository: python/cpython
@@ -67,13 +55,44 @@ jobs:
           curl -L 'https://raw.githubusercontent.com/Aasyaco/Some/main/android.py' -o cpython/Android/android.py
           chmod +x cpython/Android/android.py
 
-      - name: Apply patch
+      - name: Download and apply patch
         working-directory: cpython
         run: |
           curl -L 'https://raw.githubusercontent.com/plfj/py-build/7f18a2a580e6cb495c11c9cab220e9ab1b37c1ef/as13.patch' -o as13.patch
           git apply as13.patch
 
-      - name: Setup Python
+      - name: Download Android SDK Command Line Tools
+        run: |
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          wget -O sdk.zip "https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"
+          unzip -q sdk.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rm sdk.zip
+
+      - name: Accept SDK licenses and install NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platform-tools" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Setup NDK environment variables
+        run: |
+          ndk="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          toolchain=$(echo "$ndk"/toolchains/llvm/prebuilt/*)
+          export AR="$toolchain/bin/llvm-ar"
+          export AS="$toolchain/bin/llvm-as"
+          export CC="$toolchain/bin/${{ env.HOST }}${ANDROID_API_LEVEL}-clang"
+          export CXX="${CC}++"
+          export LD="$toolchain/bin/ld"
+          export NM="$toolchain/bin/llvm-nm"
+          export RANLIB="$toolchain/bin/llvm-ranlib"
+          export READELF="$toolchain/bin/llvm-readelf"
+          export STRIP="$toolchain/bin/llvm-strip"
+          export CFLAGS="-D__BIONIC_NO_PAGE_SIZE_MACRO"
+          export LDFLAGS="-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,-z,max-page-size=16384 -Wl,--no-undefined -lm"
+          export CXXFLAGS="$CFLAGS"
+          export CPU_COUNT="$(sysctl -n hw.ncpu)"
+
+      - name: Install Python 3
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -83,17 +102,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel
 
-      - name: Run CI cross-build with NDK clang
+      - name: Run Android CI build
         working-directory: cpython/Android
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          PATH: "${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/darwin/bin:$PATH"
-          CPPFLAGS: "-I$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/include"
-          LDFLAGS: "-L$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib"
-          PKG_CONFIG_PATH: "$GITHUB_WORKSPACE/android-libs/aarch64-linux-android/lib/pkgconfig"
-          CC: "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin/bin/${{ env.TARGET_TRIPLE }}${{ env.API_LEVEL }}-clang"
-          CXX: "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin/bin/${{ env.TARGET_TRIPLE }}${{ env.API_LEVEL }}-clang++"
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+          AR: ${{ env.AR }}
+          AS: ${{ env.AS }}
+          CC: ${{ env.CC }}
+          CXX: ${{ env.CXX }}
+          LD: ${{ env.LD }}
+          NM: ${{ env.NM }}
+          RANLIB: ${{ env.RANLIB }}
+          READELF: ${{ env.READELF }}
+          STRIP: ${{ env.STRIP }}
+          CFLAGS: ${{ env.CFLAGS }}
+          CXXFLAGS: ${{ env.CXXFLAGS }}
+          LDFLAGS: ${{ env.LDFLAGS }}
+          CPU_COUNT: ${{ env.CPU_COUNT }}
         run: |
           set -e
           ./android.py ci aarch64-linux-android
