@@ -3,7 +3,7 @@ name: Build compression libs for Android (aarch64)
 on:
   push:
     branches:
-      - "**"
+      - loo
   workflow_dispatch:
 
 jobs:
