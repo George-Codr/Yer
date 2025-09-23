@@ -8,7 +8,7 @@ on:
 
 jobs:
   android-ci:
-    runs-on: macos-latest
+    runs-on: macos-14
 
     env:
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -119,16 +119,4 @@ jobs:
           PKG_CONFIG_PATH: ""  # Clear for host tools build
         run: |
           set -e
-          # Build host tools first without Android flags
-          echo "Building host tools..."
-          export CPPFLAGS=""
-          export LDFLAGS=""
-          export PKG_CONFIG_PATH=""
-          ./android.py build-host-tools  # If such target exists
-          
-          # Then build Android target with Android flags
-          echo "Building Android target..."
-          export CPPFLAGS="${{ env.CPPFLAGS }}"
-          export LDFLAGS="${{ env.LDFLAGS }}"
-          export PKG_CONFIG_PATH="${{ env.PKG_CONFIG_PATH }}"
           ./android.py ci aarch64-linux-android
