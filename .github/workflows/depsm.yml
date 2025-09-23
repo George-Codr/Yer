@@ -66,7 +66,9 @@ jobs:
           curl -L https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz -o bzip2.tar.gz
           tar -xzf bzip2.tar.gz
           cd bzip2-1.0.8
-          make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android all
+          # Modify Makefile to skip tests and set installation prefix
+          sed -i 's/all: $(OBJS) bzip2 bzip2recover test/all: $(OBJS) bzip2 bzip2recover/g' Makefile
+          make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android
           make CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS="-fPIC" PREFIX=$GITHUB_WORKSPACE/android-libs/aarch64-linux-android install
 
       # ────────────── xz (standard lzma) ──────────────
