@@ -15,10 +15,23 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_NDK_VERSION: "27.3.13750724"
       ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.3.13750724
-      PATH: ${{ github.workspace }}/android-sdk/platform-tools:$PATH
 
     steps:
-      - name: Install system tools
+      - name: Ensure Homebrew is installed
+        run: |
+          if ! command -v brew &>/dev/null; then
+            echo "Homebrew not found. Installing..."
+            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            # Load brew environment
+            eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)"
+          else
+            echo "Homebrew is already installed."
+          fi
+          brew --version
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/sbin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
         run: |
           brew update
           brew install wget curl git cmake pkg-config autoconf automake libtool gnu-sed grep coreutils llvm@17
@@ -27,7 +40,6 @@ jobs:
           echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
           echo "/opt/homebrew/opt/grep/libexec/gnubin" >> $GITHUB_PATH
           echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
-          export PATH="/opt/homebrew/opt/llvm@17/bin:$PATH"
           clang --version
           llvm-profdata --version
           sed --version
