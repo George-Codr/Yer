@@ -194,12 +194,18 @@ def configure_build_python(context):
         clean("build")
     os.chdir(subdir("build", create=True))
 
+    # Updated configure command with proper optimization flags
     command = [
         relpath(PYTHON_DIR / "configure"),
         "--enable-optimizations",
-        "--with-lto",
         "--with-pgo",
+        "--with-lto",
+        f"--with-llvm-profdata={os.environ.get('LLVM_PROFDATA', 'llvm-profdata')}",
     ]
+    
+    if os.environ.get('LLVM_PROFILE_VERSION'):
+        command.append(f"--with-profile-version={os.environ['LLVM_PROFILE_VERSION']}")
+    
     if context.args:
         command.extend(context.args)
     run(command)
@@ -207,7 +213,9 @@ def configure_build_python(context):
 
 def make_build_python(context):
     os.chdir(subdir("build"))
-    run(["make", "-j", str(os.cpu_count())])
+    run(["make", "-j", str(os.cpu_count()), "profile-gen"])
+    run(["make", "profile-run"])
+    run(["make", "-j", str(os.cpu_count()), "profile-use"])
 
 
 def unpack_deps(host, prefix_dir):
@@ -239,7 +247,7 @@ def configure_host_python(context):
 
     os.chdir(host_dir)
     
-    # Base configuration command
+    # Updated configure command for host Python
     command = [
         relpath(PYTHON_DIR / "configure"),
         f"--host={context.host}",
@@ -248,22 +256,24 @@ def configure_host_python(context):
         "--without-ensurepip",
         "--enable-shared",
         "--enable-optimizations",
-        "--with-lto",
         "--with-pgo",
+        "--with-lto",
         "--without-static-libpython",
+        f"--with-openssl={prefix_dir}",
     ]
 
-    # Add compression libraries path if available
-    compression_libs_path = os.environ.get("COMPRESSION_LIBS_PATH")
-    if compression_libs_path:
+    # Add compression libraries support
+    libs_dir = Path(os.environ.get('GITHUB_WORKSPACE', '')) / 'libs'
+    if libs_dir.exists():
         command.extend([
-            f"--with-zlib={compression_libs_path}",
-            f"--with-bzip2={compression_libs_path}",
-            f"--with-lzma={compression_libs_path}",
+            f"--with-zlib={libs_dir}",
+            f"--with-bzip2={libs_dir}",
+            f"--with-lzma={libs_dir}",
+            f"--with-zstd={libs_dir}",
         ])
 
-    # Add OpenSSL
-    command.append(f"--with-openssl={prefix_dir}")
+    if os.environ.get('LLVM_PROFILE_VERSION'):
+        command.append(f"--with-profile-version={os.environ['LLVM_PROFILE_VERSION']}")
 
     if context.args:
         command.extend(context.args)
@@ -273,22 +283,25 @@ def configure_host_python(context):
 def make_host_python(context):
     host_dir = subdir(context.host)
     prefix_dir = host_dir / "prefix"
-    
-    # Clear previous Python installation
     for pattern in ("include/python*", "lib/libpython*", "lib/python*"):
         delete_glob(f"{prefix_dir}/{pattern}")
 
     os.chdir(host_dir)
     
-    # Build with optimization flags
+    # Build with PGO
     env = os.environ.copy()
-    env.update({
-        "CFLAGS": "-O3 -D__BIONIC_NO_PAGE_SIZE_MACRO",
-        "CXXFLAGS": "-O3 -D__BIONIC_NO_PAGE_SIZE_MACRO",
-        "LDFLAGS": "-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,-z,max-page-size=16384 -Wl,--no-undefined -lm",
-    })
+    if 'LLVM_PROFILE_VERSION' in os.environ:
+        env['LLVM_PROFDATA_VERSION'] = os.environ['LLVM_PROFILE_VERSION']
     
-    run(["make", "-j", str(os.cpu_count())], env=env)
+    # First pass - generate profile data
+    run(["make", "-j", str(os.cpu_count()), "profile-gen"], env=env)
+    
+    # Training run
+    run(["make", "profile-run"], env=env)
+    
+    # Second pass - use profile data
+    run(["make", "-j", str(os.cpu_count()), "profile-use"], env=env)
+    
     run(
         ["make", "install", f"prefix={prefix_dir}"],
         capture_output=not context.verbose,
