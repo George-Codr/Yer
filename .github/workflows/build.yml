@@ -42,6 +42,13 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
             "platform-tools" "ndk;${ANDROID_NDK_VERSION}"
 
+      - name: Add NDK toolchain binaries to PATH
+        run: |
+          TOOLCHAIN=$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/darwin-x86_64/bin
+          echo "$TOOLCHAIN" >> $GITHUB_PATH
+          echo "LLVM_PROFDATA=$TOOLCHAIN/llvm-profdata" >> $GITHUB_ENV
+          $TOOLCHAIN/llvm-profdata --version
+
       - name: Checkout python/cpython (branch 3.13)
         uses: actions/checkout@v4
         with:
