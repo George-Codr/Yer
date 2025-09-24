@@ -15,11 +15,11 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_NDK_VERSION: "27.3.13750724"
       ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.3.13750724
+      COMPRESSION_LIBS_URL: "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
 
     steps:
       - name: Install basic tools
         run: |
-          # Install Homebrew if missing
           if ! command -v brew &>/dev/null; then
             echo "Installing Homebrew..."
             NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -27,6 +27,13 @@ jobs:
           fi
           brew update
           brew install wget curl git cmake pkg-config autoconf automake libtool unzip
+
+      - name: Download compression libraries
+        run: |
+          mkdir -p libs
+          wget -O compression-libs.tar.gz "$COMPRESSION_LIBS_URL"
+          tar xf compression-libs.tar.gz -C libs
+          echo "COMPRESSION_LIBS_PATH=$PWD/libs" >> $GITHUB_ENV
 
       - name: Download Android SDK Command Line Tools
         run: |
@@ -58,7 +65,7 @@ jobs:
 
       - name: Download custom android.py
         run: |
-          curl -L 'https://raw.githubusercontent.com/Aasyaco/Some/main/android.py' -o cpython/Android/android.py
+          curl -L 'https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android.py' -o cpython/Android/android.py
           chmod +x cpython/Android/android.py
 
       - name: Download and apply as13.patch
@@ -85,16 +92,14 @@ jobs:
               echo "NDK not found, installing..."
               yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$ANDROID_NDK_VERSION"
           fi
-
-          # Determine clang triplet
+          
           HOST="aarch64-linux-android"
           ANDROID_API_LEVEL=21
           clang_triplet="$HOST"
-
-          # Prebuilt toolchain path
+          
           TOOLCHAIN=$(echo "$ndk/toolchains/llvm/prebuilt/"*)
           export PATH="$TOOLCHAIN/bin:$PATH"
-
+          
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export AS="$TOOLCHAIN/bin/llvm-as"
           export CC="$TOOLCHAIN/bin/${clang_triplet}${ANDROID_API_LEVEL}-clang"
@@ -106,21 +111,9 @@ jobs:
           export STRIP="$TOOLCHAIN/bin/llvm-strip"
           export LLVM_PROFDATA="$TOOLCHAIN/bin/llvm-profdata"
 
-          # Ensure all tools exist
-          for path in "$AR" "$AS" "$CC" "$CXX" "$LD" "$NM" "$RANLIB" "$READELF" "$STRIP" "$LLVM_PROFDATA"; do
-              if ! [ -e "$path" ]; then
-                  echo "$path not found!"
-                  exit 1
-              fi
-          done
-
-          # Compiler flags
-          export CFLAGS="-D__BIONIC_NO_PAGE_SIZE_MACRO -O2"
-          export CXXFLAGS="$CFLAGS"
-          export LDFLAGS="-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,-z,max-page-size=16384 -Wl,--no-undefined -lm"
-
       - name: Run CI cross-build for aarch64-linux-android
         working-directory: cpython/Android
+        env:
+          COMPRESSION_LIBS_PATH: ${{ env.COMPRESSION_LIBS_PATH }}
         run: |
-          set -e
           ./android.py ci aarch64-linux-android
