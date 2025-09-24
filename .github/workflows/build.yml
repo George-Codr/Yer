@@ -15,11 +15,12 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_NDK_VERSION: "27.3.13750724"
       ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.3.13750724
-      COMPRESSION_LIBS_URL: "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
+      LLVM_PROFDATA_VERSION: "9"  # Specify required LLVM profile version
 
     steps:
       - name: Install basic tools
         run: |
+          # Install Homebrew if missing
           if ! command -v brew &>/dev/null; then
             echo "Installing Homebrew..."
             NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -27,13 +28,6 @@ jobs:
           fi
           brew update
           brew install wget curl git cmake pkg-config autoconf automake libtool unzip
-
-      - name: Download compression libraries
-        run: |
-          mkdir -p libs
-          wget -O compression-libs.tar.gz "$COMPRESSION_LIBS_URL"
-          tar xf compression-libs.tar.gz -C libs
-          echo "COMPRESSION_LIBS_PATH=$PWD/libs" >> $GITHUB_ENV
 
       - name: Download Android SDK Command Line Tools
         run: |
@@ -48,6 +42,12 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
             "platform-tools" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Download compression libraries
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/libs"
+          wget -O compression-libs.tar.gz "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
+          tar xzf compression-libs.tar.gz -C "$GITHUB_WORKSPACE/libs"
 
       - name: Add NDK toolchain binaries to PATH
         run: |
@@ -65,7 +65,7 @@ jobs:
 
       - name: Download custom android.py
         run: |
-          curl -L 'https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android.py' -o cpython/Android/android.py
+          curl -L 'https://raw.githubusercontent.com/Aasyaco/Some/main/android.py' -o cpython/Android/android.py
           chmod +x cpython/Android/android.py
 
       - name: Download and apply as13.patch
@@ -88,32 +88,21 @@ jobs:
         run: |
           set -e
           ndk="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-          if ! [ -d "$ndk" ]; then
-              echo "NDK not found, installing..."
-              yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$ANDROID_NDK_VERSION"
-          fi
-          
-          HOST="aarch64-linux-android"
-          ANDROID_API_LEVEL=21
-          clang_triplet="$HOST"
-          
           TOOLCHAIN=$(echo "$ndk/toolchains/llvm/prebuilt/"*)
-          export PATH="$TOOLCHAIN/bin:$PATH"
           
-          export AR="$TOOLCHAIN/bin/llvm-ar"
-          export AS="$TOOLCHAIN/bin/llvm-as"
-          export CC="$TOOLCHAIN/bin/${clang_triplet}${ANDROID_API_LEVEL}-clang"
-          export CXX="${CC}++"
-          export LD="$TOOLCHAIN/bin/ld"
-          export NM="$TOOLCHAIN/bin/llvm-nm"
-          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          export READELF="$TOOLCHAIN/bin/llvm-readelf"
-          export STRIP="$TOOLCHAIN/bin/llvm-strip"
+          # Configure LLVM profile version
+          echo "LLVM_PROFILE_VERSION=$LLVM_PROFDATA_VERSION" >> $GITHUB_ENV
+          
+          # Export path and tools
+          export PATH="$TOOLCHAIN/bin:$PATH"
           export LLVM_PROFDATA="$TOOLCHAIN/bin/llvm-profdata"
+          
+          # Set optimization flags
+          export CFLAGS="-O3 -DNDEBUG -fprofile-generate"
+          export CXXFLAGS="$CFLAGS"
+          export LDFLAGS="-fprofile-generate"
 
       - name: Run CI cross-build for aarch64-linux-android
         working-directory: cpython/Android
-        env:
-          COMPRESSION_LIBS_PATH: ${{ env.COMPRESSION_LIBS_PATH }}
         run: |
           ./android.py ci aarch64-linux-android
