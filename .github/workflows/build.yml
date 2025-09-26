@@ -113,8 +113,10 @@ jobs:
           mkdir -p "$SYSROOT"
           curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
           tar -xzvf compression-libs.tar.gz -C "$SYSROOT"
-          echo "LDFLAGS=-L$SYSROOT/lib" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$SYSROOT/lib -Wl,-rpath,$SYSROOT/lib" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
         env:
@@ -122,13 +124,18 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          CFLAGS: -O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -march=armv8-a+crypto+crc
-          LDFLAGS: -flto -Wl,-O3 -Wl,--as-needed -Wl,--strip-all
+          CFLAGS: -O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -march=armv8-a+crypto+crc -I${{ github.workspace }}/android-libs/include
+          LDFLAGS: -flto -Wl,-O3 -Wl,--as-needed -Wl,--strip-all -L${{ github.workspace }}/android-libs/lib -Wl,-rpath,${{ github.workspace }}/android-libs/lib
+          LIBRARY_PATH: ${{ github.workspace }}/android-libs/lib
         run: |
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          # Verify libraries are accessible
+          ls -la ${{ github.workspace }}/android-libs/lib/
           ./android.py clean
-          ./android.py ci aarch64-linux-android -- --enable-optimizations --with-lto --with-computed-gotos --with-ensurepip=no --with-system-ffi --with-system-expat
-          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found'
+          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
+          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
+          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-system-ffi --with-system-expat
+          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
       - name: Package as .deb
         run: |
           PKG_NAME=${{ matrix.pkg_name }}
