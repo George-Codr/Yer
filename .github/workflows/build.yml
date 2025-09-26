@@ -1,108 +1,159 @@
-name: Android CI Cross-Build (aarch64-linux-android, macOS, custom android.py, as13.patch)
+name: Build Android
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - '3.*'
   pull_request:
+    branches:
+      - main
+      - '3.*'
 
 jobs:
-  android-ci:
+  build-android:
+    name: Android (aarch64) Python ${{ matrix.python_version }}
     runs-on: macos-14
-
+    timeout-minutes: 90
     env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      CC: clang
+      CXX: clang++
+      LD: clang
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_VERSION: "27.3.13750724"
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.3.13750724
-      LLVM_PROFDATA_VERSION: "9"  # Specify required LLVM profile version
-
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-ndk
+      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
+    strategy:
+      matrix:
+        include:
+          - python_version: "3.13"
+            cpython_ref: "3.13"
+            folder: "cpython-3.13"
+            pkg_name: "pyv313"
+            patch: true
+          - python_version: "3.14"
+            cpython_ref: "3.14"
+            folder: "cpython-3.14"
+            pkg_name: "pyv314"
+            patch: false
+          - python_version: "3.15"
+            cpython_ref: "main"
+            folder: "cpython-3.15"
+            pkg_name: "pyv315"
+            patch: false
     steps:
-      - name: Install basic tools
+      - name: Install dependencies
         run: |
-          # Install Homebrew if missing
-          if ! command -v brew &>/dev/null; then
-            echo "Installing Homebrew..."
-            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)"
+          for dep in readline llvm lld dpkg mpdecimal; do
+            if ! brew list $dep >/dev/null 2>&1; then
+              brew install $dep
+            fi
+          done
+          if brew list gcc >/dev/null 2>&1; then
+            brew uninstall gcc
           fi
-          brew update
-          brew install wget curl git cmake pkg-config autoconf automake libtool unzip
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 
-      - name: Download Android SDK Command Line Tools
+      - name: Install Android SDK & NDK
         run: |
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          wget -O sdk.zip "https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"
-          unzip -q sdk.zip -d "$ANDROID_HOME/cmdline-tools"
-          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          set -e
+          SDK_URL="https://dl.google.com/android/repository/commandlinetools-mac-10406996_latest.zip"
+          NDK_URL="https://dl.google.com/android/repository/android-ndk-r26c-darwin.zip"
+          SDK_DIR="${{ github.workspace }}/android-sdk"
+          NDK_DIR="${{ github.workspace }}/android-ndk"
+
+          # Download and extract SDK
+          mkdir -p "$SDK_DIR/cmdline-tools"
+          curl -L "$SDK_URL" -o sdk.zip
+          unzip -q sdk.zip -d "$SDK_DIR/cmdline-tools"
+          mv "$SDK_DIR/cmdline-tools/cmdline-tools" "$SDK_DIR/cmdline-tools/latest"
           rm sdk.zip
 
-      - name: Accept Android SDK licenses and install NDK & platform-tools
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" "ndk;${ANDROID_NDK_VERSION}"
+          # Download and extract NDK
+          mkdir -p "$NDK_DIR"
+          curl -L "$NDK_URL" -o ndk.zip
+          unzip -q ndk.zip -d "$NDK_DIR"
+          rm ndk.zip
 
-      - name: Download compression libraries
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/libs"
-          wget -O compression-libs.tar.gz "https://github.com/George-Codr/Yer/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz"
-          tar xzf compression-libs.tar.gz -C "$GITHUB_WORKSPACE/libs"
+          # Accept licenses and install platform tools and build-tools
+          export ANDROID_SDK_ROOT="$SDK_DIR"
+          export ANDROID_HOME="$SDK_DIR"
+          yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --install "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --licenses
 
-      - name: Add NDK toolchain binaries to PATH
-        run: |
-          TOOLCHAIN=$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/darwin-x86_64/bin
-          echo "$TOOLCHAIN" >> $GITHUB_PATH
-          echo "LLVM_PROFDATA=$TOOLCHAIN/llvm-profdata" >> $GITHUB_ENV
-          $TOOLCHAIN/llvm-profdata --version
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$NDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "PATH=$SDK_DIR/platform-tools:$PATH" >> $GITHUB_ENV
 
-      - name: Checkout python/cpython (branch 3.13)
+      - name: Checkout CPython
         uses: actions/checkout@v4
         with:
           repository: python/cpython
-          ref: 3.13
-          path: cpython
+          ref: ${{ matrix.cpython_ref }}
+          path: ${{ matrix.folder }}
 
-      - name: Download custom android.py
+      - name: Apply patches
+        if: ${{ matrix.patch }}
+        working-directory: ./${{ matrix.folder }}
         run: |
-          curl -L 'https://raw.githubusercontent.com/Aasyaco/Some/main/android.py' -o cpython/Android/android.py
-          chmod +x cpython/Android/android.py
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          curl -L https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
+          git apply termux.patch
+          curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
+          git apply ./as13.patch
 
-      - name: Download and apply as13.patch
-        working-directory: cpython
+      - name: Build CPython for Android
+        working-directory: ./${{ matrix.folder }}/Android
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
-          curl -L 'https://raw.githubusercontent.com/plfj/py-build/7f18a2a580e6cb495c11c9cab220e9ab1b37c1ef/as13.patch' -o as13.patch
-          git apply as13.patch
-
-      - name: Install Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel
-
-      - name: Set up NDK clang environment
-        run: |
-          set -e
-          ndk="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-          TOOLCHAIN=$(echo "$ndk/toolchains/llvm/prebuilt/"*)
-          
-          # Configure LLVM profile version
-          echo "LLVM_PROFILE_VERSION=$LLVM_PROFDATA_VERSION" >> $GITHUB_ENV
-          
-          # Export path and tools
-          export PATH="$TOOLCHAIN/bin:$PATH"
-          export LLVM_PROFDATA="$TOOLCHAIN/bin/llvm-profdata"
-          
-          # Set optimization flags
-          export CFLAGS="-O3 -DNDEBUG -fprofile-generate"
-          export CXXFLAGS="$CFLAGS"
-          export LDFLAGS="-fprofile-generate"
-
-      - name: Run CI cross-build for aarch64-linux-android
-        working-directory: cpython/Android
-        run: |
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
           ./android.py ci aarch64-linux-android
+          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found'
+
+      - name: Package as .deb
+        run: |
+          PKG_NAME=${{ matrix.pkg_name }}
+          PKG_VERSION=${{ matrix.python_version }}
+          ARCH=aarch64
+          BUILD_DIR=./${{ matrix.folder }}/cross-build/aarch64-linux-android
+          OUT_DIR=$( [ -d "$BUILD_DIR/prefix" ] && echo "$BUILD_DIR/prefix" || echo "$BUILD_DIR/install" )
+          DEB_DIR=$PKG_NAME
+
+          mkdir -p $DEB_DIR/DEBIAN
+          mkdir -p $DEB_DIR/usr
+          cp -r $OUT_DIR/* $DEB_DIR/usr/
+
+          cat > $DEB_DIR/DEBIAN/control <<EOF
+          Package: $PKG_NAME
+          Version: $PKG_VERSION
+          Architecture: $ARCH
+          Maintainer: Cross-compiled by NotFound
+          Description: Python $PKG_VERSION cross-compiled for Termux aarch64
+          EOF
+
+          cat > $DEB_DIR/DEBIAN/postinst <<EOF
+          #!/bin/sh
+          set -e
+          echo "$PKG_NAME installed successfully!"
+          exit 0
+          EOF
+          chmod 755 $DEB_DIR/DEBIAN/postinst
+
+          dpkg-deb --build $DEB_DIR ${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg_name }}
+          path: ${{ matrix.pkg_name }}_${{ matrix.python_version }}_aarch64.deb
+          if-no-files-found: error
