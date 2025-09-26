@@ -107,7 +107,14 @@ jobs:
           git apply termux.patch
           curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
           git apply ./as13.patch
-
+      - name: Install pre-built compression libraries (bz2, lzma)
+        run: |
+          SYSROOT="${{ github.workspace }}/android-libs"
+          mkdir -p "$SYSROOT"
+          curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
+          tar -xzvf compression-libs.tar.gz -C "$SYSROOT"
+          echo "LDFLAGS=-L$SYSROOT/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
         env:
