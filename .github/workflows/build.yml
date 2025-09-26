@@ -117,7 +117,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-          ./android.py ci aarch64-linux-android
+          ./android.py ci aarch64-linux-android -- --enable-optimizations
           python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found'
 
       - name: Package as .deb
