@@ -92,7 +92,7 @@ jobs:
           echo "PATH=$SDK_DIR/platform-tools:$PATH" >> $GITHUB_ENV
 
       - name: Checkout CPython
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: python/cpython
           ref: ${{ matrix.cpython_ref }}
