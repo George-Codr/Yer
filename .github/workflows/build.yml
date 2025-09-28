@@ -16,17 +16,6 @@ jobs:
     name: Android (aarch64) Python ${{ matrix.python_version }}
     runs-on: macos-14
     timeout-minutes: 90
-    env:
-      CC: clang
-      CXX: clang++
-      LD: clang
-      AR: llvm-ar
-      NM: llvm-nm
-      RANLIB: llvm-ranlib
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-ndk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
     strategy:
       matrix:
         include:
@@ -45,6 +34,12 @@ jobs:
             folder: "cpython-3.15"
             pkg_name: "pyv315"
             patch: false
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-ndk
+      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
+
     steps:
       - name: Install dependencies
         run: |
@@ -79,9 +74,7 @@ jobs:
           unzip -q ndk.zip -d "$NDK_DIR"
           rm ndk.zip
 
-          # Accept licenses and install platform tools and build-tools
-          export ANDROID_SDK_ROOT="$SDK_DIR"
-          export ANDROID_HOME="$SDK_DIR"
+          # Accept licenses and install platform tools
           yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --install "platform-tools" "build-tools;34.0.0" "platforms;android-34"
           yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --licenses
 
@@ -107,17 +100,19 @@ jobs:
           git apply termux.patch
           curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
           git apply ./as13.patch
+
       - name: Install pre-built compression libraries (bz2, lzma)
         run: |
-          SYSROOT="${{ github.workspace }}/android-libs/aarch64-linux-android"
-          mkdir -p ${{ github.workspace }}/android-libs
-          mkdir -p "$SYSROOT"
+          PREFIX="${{ github.workspace }}/android-libs/aarch64-linux-android"
+          mkdir -p "${{ github.workspace }}/android-libs"
           curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
-          tar -xzvf compression-libs.tar.gz -C "${{ github.workspace }}/android-libs"
-          echo "LDFLAGS=-L$SYSROOT/lib -Wl,-rpath,$SYSROOT/lib" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
+          # Extract so that PREFIX/lib and PREFIX/include exist
+          tar -xzvf compression-libs.tar.gz -C "${{ github.workspace }}/android-libs" --strip-components=1
+          echo "LDFLAGS=-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$PREFIX/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$PREFIX/lib" >> $GITHUB_ENV
+
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
         env:
@@ -125,18 +120,22 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          CFLAGS: -O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -march=armv8-a+crypto+crc -I${{ github.workspace }}/android-libs/aarch64-linux-android/include
-          LDFLAGS: -flto -Wl,-O3 -Wl,--as-needed -Wl,--strip-all -L${{ github.workspace }}/android-libs/aarch64-linux-android/lib -Wl,-rpath,${{ github.workspace }}/android-libs/aarch64-linux-android/lib
+          SYSROOT: ${{ github.workspace }}/android-libs/aarch64-linux-android
+          CC: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android34-clang
+          CXX: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android34-clang++
+          AR: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar
+          RANLIB: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ranlib
+          CFLAGS: "-O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -I${{ github.workspace }}/android-libs/aarch64-linux-android/include"
+          LDFLAGS: "-flto -L${{ github.workspace }}/android-libs/aarch64-linux-android/lib -Wl,-rpath,${{ github.workspace }}/android-libs/aarch64-linux-android/lib"
           LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
         run: |
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-          # Verify libraries are accessible
-          ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
+          ls -la $SYSROOT/lib/
           ./android.py clean
-          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
-          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
+          mkdir -p cross-build/build
           ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-system-ffi --with-system-expat
-          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
+          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p cross-build/build
+
       - name: Package as .deb
         run: |
           PKG_NAME=${{ matrix.pkg_name }}
