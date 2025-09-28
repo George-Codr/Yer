@@ -89,7 +89,7 @@ jobs:
           echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$NDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
-          echo "PATH=$SDK_DIR/platform-tools:$PATH" >> $GITHUB_ENV
+          echo "PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH" >> $GITHUB_ENV
 
       - name: Checkout CPython
         uses: actions/checkout@v5
@@ -102,7 +102,7 @@ jobs:
         if: ${{ matrix.patch }}
         working-directory: ./${{ matrix.folder }}
         run: |
-          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          export PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH
           curl -L https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
           git apply termux.patch
           curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
@@ -126,10 +126,10 @@ jobs:
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           SYSROOT: ${{ github.workspace }}/android-libs/aarch64-linux-android
-          CC: /opt/homebrew/opt/llvm/bin/clang
-          CXX: /opt/homebrew/opt/llvm/bin/clang++
-          AR: /opt/homebrew/opt/llvm/bin/llvm-ar
-          RANLIB: /opt/homebrew/opt/llvm/bin/llvm-ranlib
+          CC: clang
+          CXX: clang++
+          AR: llvm-ar
+          RANLIB: llvm-ranlib
           CFLAGS: "-O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -I${{ github.workspace }}/android-libs/aarch64-linux-android/include"
           LDFLAGS: "-flto -L${{ github.workspace }}/android-libs/aarch64-linux-android/lib -Wl,-rpath,${{ github.workspace }}/android-libs/aarch64-linux-android/lib"
           LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
