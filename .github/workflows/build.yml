@@ -125,13 +125,13 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          CFLAGS: -O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -march=armv8-a+crypto+crc -I${{ github.workspace }}/android-libs/include
-          LDFLAGS: -flto -Wl,-O3 -Wl,--as-needed -Wl,--strip-all -L${{ github.workspace }}/android-libs/lib -Wl,-rpath,${{ github.workspace }}/android-libs/lib
-          LIBRARY_PATH: ${{ github.workspace }}/android-libs/lib
+          CFLAGS: -O3 -flto -fomit-frame-pointer -fno-semantic-interposition -fno-trapping-math -fstrict-aliasing -march=armv8-a+crypto+crc -I${{ github.workspace }}/android-libs/aarch64-linux-android/include
+          LDFLAGS: -flto -Wl,-O3 -Wl,--as-needed -Wl,--strip-all -L${{ github.workspace }}/android-libs/aarch64-linux-android/lib -Wl,-rpath,${{ github.workspace }}/android-libs/aarch64-linux-android/lib
+          LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
         run: |
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
           # Verify libraries are accessible
-          ls -la ${{ github.workspace }}/android-libs/lib/
+          ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
           ./android.py clean
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
