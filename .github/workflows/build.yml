@@ -113,7 +113,7 @@ jobs:
           mkdir -p ${{ github.workspace }}/android-libs
           mkdir -p "$SYSROOT"
           curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
-          tar -xzvf compression-libs.tar.gz -C "$SYSROOT"
+          tar -xzvf compression-libs.tar.gz -C "${{ github.workspace }}/android-libs"
           echo "LDFLAGS=-L$SYSROOT/lib -Wl,-rpath,$SYSROOT/lib" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
