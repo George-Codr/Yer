@@ -17,9 +17,9 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 90
     env:
-      CC: clang
-      CXX: clang++
-      LD: clang
+      CC: aarch64-linux-android34-clang
+      CXX: aarch64-linux-android34-clang++
+      LD: $CC
       AR: llvm-ar
       NM: llvm-nm
       RANLIB: llvm-ranlib
@@ -134,13 +134,12 @@ jobs:
           LDFLAGS: "-flto -L${{ github.workspace }}/android-libs/aarch64-linux-android/lib -Wl,-rpath,${{ github.workspace }}/android-libs/aarch64-linux-android/lib"
           LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
         run: |
-          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
           # Verify libraries are accessible
           ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
           ./android.py clean
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
-          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-system-ffi --with-system-expat
+          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-system-expat
           python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
       - name: Package as .deb
         run: |
