@@ -109,7 +109,8 @@ jobs:
           git apply ./as13.patch
       - name: Install pre-built compression libraries (bz2, lzma)
         run: |
-          SYSROOT="${{ github.workspace }}/android-libs"
+          SYSROOT="${{ github.workspace }}/android-libs/aarch64-linux-android"
+          mkdir -p ${{ github.workspace }}/android-libs
           mkdir -p "$SYSROOT"
           curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
           tar -xzvf compression-libs.tar.gz -C "$SYSROOT"
