@@ -118,14 +118,6 @@ jobs:
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
-      - name: Install libexpat/libexpat
-        run: |
-          git clone https://github.com/libexpat/libexpat.git
-          cd libexpat/expat
-          ./buildconf.sh
-          ./configure --host=aarch64-linux-android --prefix=$SYSROOT --disable-shared --enable-static
-          make -j$(nproc)
-          make install
 
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
@@ -148,7 +140,7 @@ jobs:
           ./android.py clean
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
-          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-system-expat
+          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos
           python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
       - name: Package as .deb
         run: |
