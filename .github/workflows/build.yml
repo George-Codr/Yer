@@ -141,7 +141,7 @@ jobs:
           ./android.py clean
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
-          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --build=$(uname -m)-apple-darwin --host=aarch64-linux-android
+          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-build-python=/usr/bin/python3 --build=arm64-apple-darwin --host=aarch64-linux-android
           python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
       - name: Package as .deb
         run: |
