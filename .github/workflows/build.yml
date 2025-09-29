@@ -118,6 +118,15 @@ jobs:
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
+      - name: Install libexpat/libexpat
+        run: |
+          git clone https://github.com/libexpat/libexpat.git
+          cd libexpat/expat
+          ./buildconf.sh
+          ./configure --host=aarch64-linux-android --prefix=$SYSROOT --disable-shared --enable-static
+          make -j$(nproc)
+          make install
+
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
         env:
