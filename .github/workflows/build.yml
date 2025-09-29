@@ -57,6 +57,8 @@ jobs:
             brew uninstall gcc
           fi
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          ls /Users/runner/python3/bin || true
+          ls /Users/runner/.local/bin || true
 
       - name: Install Android SDK & NDK
         run: |
