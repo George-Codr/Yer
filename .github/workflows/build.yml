@@ -119,13 +119,16 @@ jobs:
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
+
       - name: Build CPython natively on macOS
         working-directory: ./${{ matrix.folder }}
         run: |
-         ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
-         make -j$(sysctl -n hw.ncpu)
-         make install
-         echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
+          unset CC CXX AR LD RANLIB NM
+          ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
+          make -j$(sysctl -n hw.ncpu)
+          make install
+          echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
+
  
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
