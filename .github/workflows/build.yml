@@ -113,7 +113,7 @@ jobs:
       - name: Build CPython natively on macOS
         working-directory: ./${{ matrix.folder }}
         run: |
-          unset LDFLAGS CPPFLAGS LIBRARY_PATH LD_LIBRARY_PATH
+          unset LDFLAGS CPPFLAGS LIBRARY_PATH LD_LIBRARY_PATH CC CXX LD
           ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
           make -j$(sysctl -n hw.ncpu)
           make install
