@@ -108,6 +108,17 @@ jobs:
           git apply termux.patch
           curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
           git apply ./as13.patch
+
+
+      - name: Build CPython natively on macOS
+        working-directory: ./${{ matrix.folder }}
+        run: |
+          unset LDFLAGS CPPFLAGS LIBRARY_PATH LD_LIBRARY_PATH
+          ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
+          make -j$(sysctl -n hw.ncpu)
+          make install
+          echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
+
       - name: Install pre-built compression libraries (bz2, lzma)
         run: |
           SYSROOT="${{ github.workspace }}/android-libs/aarch64-linux-android"
@@ -119,15 +130,6 @@ jobs:
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
-
-      - name: Build CPython natively on macOS
-        working-directory: ./${{ matrix.folder }}
-        run: |
-          unset CC CXX AR LD RANLIB NM
-          ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
-          make -j$(sysctl -n hw.ncpu)
-          make install
-          echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
 
  
       - name: Build CPython for Android
