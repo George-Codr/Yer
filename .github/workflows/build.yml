@@ -152,6 +152,7 @@ jobs:
           # Verify libraries are accessible
           ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
           ./android.py clean
+          echo "PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH" >> $GITHUB_ENV
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
           ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-build-python=$PYTHON_FOR_BUILD --build=arm64-apple-darwin --host=aarch64-linux-android
