@@ -119,7 +119,14 @@ jobs:
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
-
+      - name: Build CPython natively on macOS
+        working-directory: ./${{ matrix.folder }}
+        run: |
+         ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
+         make -j$(sysctl -n hw.ncpu)
+         make install
+         echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
+ 
       - name: Build CPython for Android
         working-directory: ./${{ matrix.folder }}/Android
         env:
@@ -141,7 +148,7 @@ jobs:
           ./android.py clean
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
           mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
-          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-build-python=/usr/bin/python3 --build=arm64-apple-darwin --host=aarch64-linux-android
+          ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-build-python=$PYTHON_FOR_BUILD --build=arm64-apple-darwin --host=aarch64-linux-android
           python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
       - name: Package as .deb
         run: |
