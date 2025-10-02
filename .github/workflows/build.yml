@@ -133,22 +133,23 @@ jobs:
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
 
  
-      - name: Build CPython for Android
-        working-directory: ./${{ matrix.folder }}/Android
+      - name: Build CPython for Android (cross)
+        working-directory: ${{ github.workspace }}/${{ matrix.folder }}/Android
         env:
-          PATH: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH
+          PATH: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          SYSROOT: $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
+          SYSROOT: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
           CC: aarch64-linux-android34-clang
           CXX: aarch64-linux-android34-clang++
           AR: llvm-ar
           RANLIB: llvm-ranlib
           CFLAGS:  "-O3 -flto --sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          LDFLAGS:  "-flto --sysroot=$SYSROOT -L$SYSROOT/usr/lib"
+          LDFLAGS: "-flto --sysroot=$SYSROOT -L$SYSROOT/usr/lib"
           LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
+
         run: |
           # Verify libraries are accessible
           ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
