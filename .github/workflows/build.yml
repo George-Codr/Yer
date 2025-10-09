@@ -132,7 +132,7 @@ jobs:
           ./android.py clean || true
           mkdir -p "${{ github.workspace }}/${{ matrix.folder }}/cross-build"
           mkdir -p "${{ github.workspace }}/${{ matrix.folder }}/cross-build/build"
-          python ./android.py ci --fast-ci ${{ matrix.arch }}-linux-android -p ${{ matrix.python_version }}
+          python ./android.py ci --fast-ci ${{ matrix.arch }}-linux-android
           python -c "import sys; print('python for build:', sys.version)"
       - name: Package as .deb
         run: |
