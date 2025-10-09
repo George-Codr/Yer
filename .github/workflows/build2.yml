@@ -1,0 +1,115 @@
+name: Build Static Android Python
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, '3.*']
+  pull_request:
+    branches: [main, '3.*']
+
+jobs:
+  build-static:
+    name: Build Static Python (${{ matrix.version }})
+    runs-on: macos-14
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: 3.13
+            branch: 3.13
+          - version: 3.14
+            branch: 3.14
+          - version: 3.15
+            branch: main
+
+    env:
+      CC: clang
+      CXX: clang++
+      LD: clang
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+      LLVM_PATH: /opt/homebrew/opt/llvm/bin
+      ARCH: aarch64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up environment
+        run: |
+          set -euxo pipefail
+          brew update
+          brew install readline llvm lld mpdecimal || true
+          brew uninstall gcc || true
+          echo "$LLVM_PATH" >> $GITHUB_PATH
+          export PATH="$LLVM_PATH:$PATH"
+
+      - name: Cache LLVM and dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+            /opt/homebrew/Cellar/llvm
+          key: llvm-static-${{ runner.os }}-${{ hashFiles('.github/workflows/build-static-android.yml') }}
+
+      - name: Checkout CPython repository
+        uses: actions/checkout@v5
+        with:
+          repository: python/cpython
+          ref: ${{ matrix.branch }}
+          path: cpython-${{ matrix.version }}
+          fetch-depth: 1
+
+      - name: Apply patches (only for 3.13)
+        if: matrix.version == '3.13'
+        working-directory: ./cpython-${{ matrix.version }}
+        run: |
+          set -euxo pipefail
+          curl -L https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
+          curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
+          git apply ./termux.patch || echo "⚠️ termux.patch apply failed — continuing."
+          git apply ./as13.patch || echo "⚠️ as13.patch apply failed — continuing."
+
+      - name: Configure CPython for static build
+        working-directory: ./cpython-${{ matrix.version }}
+        run: |
+          set -euxo pipefail
+          export CFLAGS="-fPIC -static"
+          export LDFLAGS="-static"
+          ./configure \
+            --host=aarch64-linux-android \
+            --build=x86_64-apple-darwin \
+            --prefix=/python-static \
+            --enable-optimizations \
+            --with-static-libpython \
+            --without-shared \
+            --with-ensurepip=install
+          echo "✅ Configuration finished for version ${{ matrix.version }}"
+
+      - name: Build CPython statically
+        working-directory: ./cpython-${{ matrix.version }}
+        run: |
+          set -euxo pipefail
+          make -j$(nproc)
+          make install DESTDIR=$(pwd)/install
+          echo "✅ Static build finished for version ${{ matrix.version }}"
+          ls -lh ./install/python-static || echo "⚠️ Build output not found"
+
+      - name: Package as tar.gz
+        run: |
+          set -euxo pipefail
+          VERSION="${{ matrix.version }}"
+          PKG_NAME="python-static-${VERSION}"
+          ARCH="aarch64"
+          INSTALL_DIR="./cpython-${VERSION}/install/python-static"
+          tar -czf "${PKG_NAME}_${VERSION}_${ARCH}.tar.gz" -C "$INSTALL_DIR" .
+          echo "✅ Packaged ${PKG_NAME}_${VERSION}_${ARCH}.tar.gz"
+
+      - name: Upload static Python archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-static-${{ matrix.version }}
+          path: python-static-*_${{ matrix.version }}_aarch64.tar.gz
+          if-no-files-found: error
