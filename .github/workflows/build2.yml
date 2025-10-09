@@ -87,10 +87,11 @@ jobs:
           export LD=$TOOLCHAIN/bin/ld.lld
           export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
           export STRIP=$TOOLCHAIN/bin/llvm-strip
+          export SYSROOT=$NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
           export PATH=$TOOLCHAIN/bin:$PATH
           
-          export CFLAGS="-fPIC -static"
-          export LDFLAGS="-static"
+          export CFLAGS="--sysroot=$SYSROOT -fPIC -static"
+          export LDFLAGS="--sysroot=$SYSROOT -static"
           
           ./android.py ci --fast-ci aarch64-linux-android -- --without-shared --without-static-libpython
           echo "✅ Static build finished for Python ${{ matrix.version }}"
