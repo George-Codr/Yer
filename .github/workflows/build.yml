@@ -34,7 +34,7 @@ jobs:
       ARCH: aarch64
 
     steps:
-      - name: Checkout workflow repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up environment
@@ -77,23 +77,25 @@ jobs:
         run: |
           set -euxo pipefail
           ./android.py ci --fast-ci aarch64-linux-android
+          echo "✅ Build finished for version ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
 
       - name: Package as .deb
         run: |
           set -euxo pipefail
-          PKG_NAME=pyv${{ matrix.version//./ }}
-          PKG_VERSION=${{ matrix.version }}
-          ARCH=aarch64
-          BUILD_DIR=./cpython-${{ matrix.version }}/cross-build/${ARCH}-linux-android
+          VERSION="${{ matrix.version }}"
+          PKG_NAME="pyv${VERSION//./}"
+          PKG_VERSION="$VERSION"
+          ARCH="aarch64"
+          BUILD_DIR="./cpython-${VERSION}/cross-build/${ARCH}-linux-android"
           OUT_DIR=$( [ -d "$BUILD_DIR/prefix" ] && echo "$BUILD_DIR/prefix" || echo "$BUILD_DIR/install" )
-          DEB_DIR=$PKG_NAME
+          DEB_DIR="$PKG_NAME"
 
-          mkdir -p $DEB_DIR/DEBIAN
-          mkdir -p $DEB_DIR/usr
-          cp -r $OUT_DIR/* $DEB_DIR/usr/
+          mkdir -p "$DEB_DIR/DEBIAN"
+          mkdir -p "$DEB_DIR/usr"
+          cp -r "$OUT_DIR"/* "$DEB_DIR/usr/"
 
-          cat > $DEB_DIR/DEBIAN/control <<EOF
+          cat > "$DEB_DIR/DEBIAN/control" <<EOF
           Package: $PKG_NAME
           Version: $PKG_VERSION
           Architecture: $ARCH
@@ -101,19 +103,19 @@ jobs:
           Description: Python $PKG_VERSION cross-compiled for Termux aarch64
           EOF
 
-          cat > $DEB_DIR/DEBIAN/postinst <<EOF
+          cat > "$DEB_DIR/DEBIAN/postinst" <<EOF
           #!/bin/sh
           set -e
           echo "$PKG_NAME installed successfully!"
           exit 0
           EOF
-          chmod 755 $DEB_DIR/DEBIAN/postinst
+          chmod 755 "$DEB_DIR/DEBIAN/postinst"
 
-          dpkg-deb --build $DEB_DIR ${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb
+          dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: pyv${{ replace(matrix.version, '.', '') }}
-          path: pyv${{ replace(matrix.version, '.', '') }}_${{ matrix.version }}_aarch64.deb
+          name: pyv${{ matrix.version }}
+          path: pyv*_${{ matrix.version }}_aarch64.deb
           if-no-files-found: error
