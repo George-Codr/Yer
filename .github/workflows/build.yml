@@ -1,5 +1,4 @@
 name: Build Android
-
 on:
   workflow_dispatch:
   push:
@@ -10,7 +9,6 @@ on:
     branches:
       - main
       - '3.*'
-
 jobs:
   build-android:
     name: Android (aarch64) Python ${{ matrix.python_version }}
@@ -23,10 +21,6 @@ jobs:
       AR: llvm-ar
       NM: llvm-nm
       RANLIB: llvm-ranlib
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-ndk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
     strategy:
       matrix:
         include:
@@ -35,16 +29,19 @@ jobs:
             folder: "cpython-3.13"
             pkg_name: "pyv313"
             patch: true
+            arch: "aarch64"
           - python_version: "3.14"
             cpython_ref: "3.14"
             folder: "cpython-3.14"
             pkg_name: "pyv314"
             patch: false
+            arch: "aarch64"
           - python_version: "3.15"
             cpython_ref: "main"
             folder: "cpython-3.15"
             pkg_name: "pyv315"
             patch: false
+            arch: "aarch64"
     steps:
       - name: Install dependencies
         run: |
@@ -58,7 +55,6 @@ jobs:
           fi
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
           which -a python3 || true
-
       - name: Install Android SDK & NDK
         run: |
           set -e
@@ -66,92 +62,55 @@ jobs:
           NDK_URL="https://dl.google.com/android/repository/android-ndk-r26c-darwin.zip"
           SDK_DIR="${{ github.workspace }}/android-sdk"
           NDK_DIR="${{ github.workspace }}/android-ndk"
-
-          # Download and extract SDK
           mkdir -p "$SDK_DIR/cmdline-tools"
           curl -L "$SDK_URL" -o sdk.zip
           unzip -q sdk.zip -d "$SDK_DIR/cmdline-tools"
           mv "$SDK_DIR/cmdline-tools/cmdline-tools" "$SDK_DIR/cmdline-tools/latest"
           rm sdk.zip
-
-          # Download and extract NDK
           mkdir -p "$NDK_DIR"
           curl -L "$NDK_URL" -o ndk.zip
           unzip -q ndk.zip -d "$NDK_DIR"
           rm ndk.zip
-
-          # Accept licenses and install platform tools and build-tools
           export ANDROID_SDK_ROOT="$SDK_DIR"
           export ANDROID_HOME="$SDK_DIR"
           yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --install "platform-tools" "build-tools;34.0.0" "platforms;android-34"
           yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_DIR" --licenses
-
           echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$NDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
-          echo "PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH" >> $GITHUB_ENV
-
+          echo "PATH=$NDK_DIR/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH" >> $GITHUB_ENV
       - name: Checkout CPython
         uses: actions/checkout@v5
         with:
           repository: python/cpython
           ref: ${{ matrix.cpython_ref }}
           path: ${{ matrix.folder }}
-
       - name: Apply patches
         if: ${{ matrix.patch }}
-        working-directory: ./${{ matrix.folder }}
+        working-directory: ${{ github.workspace }}/${{ matrix.folder }}
         run: |
           export PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH
           curl -L https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
           git apply termux.patch
           curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
-          git apply ./as13.patch
-
-
-      - name: Build CPython natively on macOS
-        working-directory: ./${{ matrix.folder }}
-        run: |
-          sudo ln -s $(xcrun --find ar) /usr/local/bin/llvm-ar
-          unset LDFLAGS CPPFLAGS LIBRARY_PATH LD_LIBRARY_PATH CC CXX LD
-          ./configure --prefix=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}
-          make -j$(sysctl -n hw.ncpu)
-          make install
-          echo "PYTHON_FOR_BUILD=$GITHUB_WORKSPACE/build-python-${{ matrix.python_version }}/bin/python3" >> $GITHUB_ENV
-
+         # git apply ./as13.patch
       - name: Install pre-built compression libraries (bz2, lzma)
         run: |
           SYSROOT="${{ github.workspace }}/android-libs/aarch64-linux-android"
-          mkdir -p ${{ github.workspace }}/android-libs
+          mkdir -p "${{ github.workspace }}/android-libs"
           mkdir -p "$SYSROOT"
           curl -L https://github.com/Aasyaco/Some-help/releases/download/compression_libs/compression-libs-aarch64-android.tar.gz -o compression-libs.tar.gz
           tar -xzvf compression-libs.tar.gz -C "${{ github.workspace }}/android-libs"
+          rm compression-libs.tar.gz
           echo "LDFLAGS=-L$SYSROOT/lib -Wl,-rpath,$SYSROOT/lib" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$SYSROOT/include" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$SYSROOT/lib" >> $GITHUB_ENV
-
-      - name: Setup Python 3.12
-        env:
-          PATH: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          SYSROOT: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
-          CC: aarch64-linux-android34-clang
-          CXX: aarch64-linux-android34-clang++
-          AR: llvm-ar
-          RANLIB: llvm-ranlib
-          CFLAGS:  "-O3 -flto --sysroot=$SYSROOT -I$SYSROOT/usr/include"
-          LDFLAGS: "-flto --sysroot=$SYSROOT -L$SYSROOT/usr/lib"
-          LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
-          
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-    
+          python-version: ${{ matrix.python_version }}
       - name: Build CPython for Android (cross)
         working-directory: ${{ github.workspace }}/${{ matrix.folder }}/Android
         env:
@@ -165,32 +124,37 @@ jobs:
           CXX: aarch64-linux-android34-clang++
           AR: llvm-ar
           RANLIB: llvm-ranlib
-          CFLAGS:  "-O3 -flto --sysroot=$SYSROOT -I$SYSROOT/usr/include"
+          CFLAGS: "-O3 -flto --sysroot=$SYSROOT -I$SYSROOT/usr/include"
           LDFLAGS: "-flto --sysroot=$SYSROOT -L$SYSROOT/usr/lib"
           LIBRARY_PATH: ${{ github.workspace }}/android-libs/aarch64-linux-android/lib
-
         run: |
-          # Verify libraries are accessible
-          ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/
-          ./android.py clean
-          echo "PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH" >> $GITHUB_ENV
-          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build
-          mkdir -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
-          $(which python3.12) ./android.py ci aarch64-linux-android -- --with-ensurepip=yes --enable-optimizations --with-lto --with-computed-gotos --with-build-python=$PYTHON_FOR_BUILD --build=arm64-apple-darwin --host=aarch64-linux-android
-          python${{ matrix.python_version }} -c "print(__import__('sys').version)" || echo 'Python not found' -p /Users/runner/work/Yer/Yer/${{ matrix.folder }}/cross-build/build
+          ls -la ${{ github.workspace }}/android-libs/aarch64-linux-android/lib/ || true
+          ./android.py clean || true
+          mkdir -p "${{ github.workspace }}/${{ matrix.folder }}/cross-build"
+          mkdir -p "${{ github.workspace }}/${{ matrix.folder }}/cross-build/build"
+          python ./android.py ci --fast-ci ${{ matrix.arch }}-linux-android -p ${{ matrix.python_version }}
+          python -c "import sys; print('python for build:', sys.version)"
       - name: Package as .deb
         run: |
           PKG_NAME=${{ matrix.pkg_name }}
           PKG_VERSION=${{ matrix.python_version }}
           ARCH=aarch64
-          BUILD_DIR=./${{ matrix.folder }}/cross-build/aarch64-linux-android
-          OUT_DIR=$( [ -d "$BUILD_DIR/prefix" ] && echo "$BUILD_DIR/prefix" || echo "$BUILD_DIR/install" )
-          DEB_DIR=$PKG_NAME
-
-          mkdir -p $DEB_DIR/DEBIAN
-          mkdir -p $DEB_DIR/usr
-          cp -r $OUT_DIR/* $DEB_DIR/usr/
-
+          BUILD_DIR="${{ github.workspace }}/${{ matrix.folder }}/cross-build/${ARCH}-linux-android"
+          if [ -d "$BUILD_DIR/prefix" ]; then
+            OUT_DIR="$BUILD_DIR/prefix"
+          else
+            OUT_DIR="$BUILD_DIR/install"
+          fi
+          if [ ! -d "$OUT_DIR" ]; then
+            echo "ERROR: expected build output not found: $OUT_DIR"
+            ls -la "${{ github.workspace }}/${{ matrix.folder }}/cross-build" || true
+            exit 1
+          fi
+          DEB_DIR="${{ github.workspace }}/$PKG_NAME"
+          rm -rf "$DEB_DIR"
+          mkdir -p "$DEB_DIR/DEBIAN"
+          mkdir -p "$DEB_DIR/usr"
+          cp -r "$OUT_DIR"/* "$DEB_DIR/usr/"
           cat > $DEB_DIR/DEBIAN/control <<EOF
           Package: $PKG_NAME
           Version: $PKG_VERSION
@@ -199,19 +163,20 @@ jobs:
           Description: Python $PKG_VERSION cross-compiled for Termux aarch64
           EOF
 
-          cat > $DEB_DIR/DEBIAN/postinst <<EOF
+          cat > $DEB_DIR/DEBIAN/postinst <<	POST
           #!/bin/sh
           set -e
           echo "$PKG_NAME installed successfully!"
           exit 0
           EOF
           chmod 755 $DEB_DIR/DEBIAN/postinst
-
-          dpkg-deb --build $DEB_DIR ${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb
-
+          POST
+          dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
+          ls -la "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.pkg_name }}
           path: ${{ matrix.pkg_name }}_${{ matrix.python_version }}_aarch64.deb
           if-no-files-found: error
+    
