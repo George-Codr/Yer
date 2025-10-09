@@ -54,14 +54,14 @@ jobs:
             /opt/homebrew/Cellar/llvm
           key: llvm-${{ runner.os }}-${{ hashFiles('.github/workflows/build-android.yml') }}
 
-      - name: Clone CPython repository
-        run: |
-          set -euxo pipefail
-          git clone --depth 1 https://github.com/python/cpython.git cpython-${{ matrix.version }}
-          cd cpython-${{ matrix.version }}
-          git fetch --depth 1 origin ${{ matrix.branch }}
-          git checkout ${{ matrix.branch }}
-          ls -la
+      - name: Checkout CPython repository
+        uses: actions/checkout@v4
+        with:
+          repository: python/cpython
+          ref: ${{ matrix.branch }}
+          path: cpython-${{ matrix.version }}
+          fetch-depth: 1
+
 
       - name: Apply patches (only for 3.13)
         if: matrix.version == '3.13'
