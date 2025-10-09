@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up environment
         run: |
@@ -55,7 +55,7 @@ jobs:
           key: llvm-${{ runner.os }}-${{ hashFiles('.github/workflows/build-android.yml') }}
 
       - name: Checkout CPython repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: python/cpython
           ref: ${{ matrix.branch }}
