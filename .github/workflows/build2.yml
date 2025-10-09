@@ -93,7 +93,7 @@ jobs:
           export CFLAGS="--sysroot=$SYSROOT -fPIC -static"
           export LDFLAGS="--sysroot=$SYSROOT -static"
           
-          ./android.py ci --fast-ci aarch64-linux-android -- --without-shared --without-static-libpython
+          ./android.py ci --fast-ci aarch64-linux-android -- --without-shared --without-static-libpython --host=aarch64-linux-android
           echo "✅ Static build finished for Python ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android/dist || echo "⚠️ Package output not found"
 
