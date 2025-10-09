@@ -1,4 +1,4 @@
-name: Build Static Android Python
+name: Build Fully Static Android Python
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
   build-static:
     name: Build Static Python (${{ matrix.version }})
     runs-on: macos-14
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -24,50 +24,36 @@ jobs:
             branch: main
 
     env:
-      CC: clang
-      CXX: clang++
-      LD: clang
-      AR: llvm-ar
-      NM: llvm-nm
-      RANLIB: llvm-ranlib
-      LLVM_PATH: /opt/homebrew/opt/llvm/bin
       ARCH: aarch64
-      CFLAGS: "-fPIC -static"
-      LDFLAGS: "-static"
+      API: 21
       ANDROID_HOME: /Users/runner/Library/Android/sdk
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up environment
+      - name: Setup Android SDK & NDK
         run: |
           set -euxo pipefail
-          brew update
-          brew install readline llvm lld mpdecimal || true
-          brew uninstall gcc || true
-          echo "$LLVM_PATH" >> $GITHUB_PATH
-          export PATH="$LLVM_PATH:$PATH"
-          # Set up Android SDK
+          # Download Android command-line tools
           curl -L https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip -o cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_HOME
-          # Create license directory and pre-accept licenses to avoid interactive prompt
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          unzip -q cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
+          
+          # Accept licenses
           mkdir -p $ANDROID_HOME/licenses
-          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" > $ANDROID_HOME/licenses/android-sdk-license
-          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd\n" > $ANDROID_HOME/licenses/android-sdk-preview-license
-          echo -e "\nd975f751698b51a0c1248a6993fecb955d3f1b3f\n" > $ANDROID_HOME/licenses/android-sdk-arm-dbt-license
-          # Install platform-tools
-          $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" || true
-          # Verify licenses
-          $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_HOME/licenses/android-sdk-license
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_HOME/licenses/android-sdk-preview-license
+          echo "d975f751698b51a0c1248a6993fecb955d3f1b3f" > $ANDROID_HOME/licenses/android-sdk-arm-dbt-license
+          
+          # Install SDK & NDK
+          $ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "ndk;25.2.9519653" || true
 
-      - name: Cache LLVM and dependencies
+      - name: Cache NDK
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar/llvm
-          key: llvm-static-${{ runner.os }}-${{ hashFiles('.github/workflows/build-static-android.yml') }}
+          path: $ANDROID_HOME/ndk
+          key: ndk-static-${{ runner.os }}-${{ hashFiles('.github/workflows/build-static-android.yml') }}
 
       - name: Checkout CPython repository
         uses: actions/checkout@v5
@@ -77,7 +63,7 @@ jobs:
           path: cpython-${{ matrix.version }}
           fetch-depth: 1
 
-      - name: Apply patches (only for 3.13)
+      - name: Apply patches (only 3.13)
         if: matrix.version == '3.13'
         working-directory: ./cpython-${{ matrix.version }}
         run: |
@@ -91,8 +77,23 @@ jobs:
         working-directory: ./cpython-${{ matrix.version }}/Android
         run: |
           set -euxo pipefail
+          
+          export NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
+          export TOOLCHAIN=$NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64
+          export TARGET=aarch64-linux-android
+          export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
+          export CXX=$TOOLCHAIN/bin/${TARGET}${API}-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export LD=$TOOLCHAIN/bin/ld.lld
+          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
+          export PATH=$TOOLCHAIN/bin:$PATH
+          
+          export CFLAGS="-fPIC -static"
+          export LDFLAGS="-static"
+          
           ./android.py ci --fast-ci aarch64-linux-android -- --without-shared --without-static-libpython
-          echo "✅ Static build finished for version ${{ matrix.version }}"
+          echo "✅ Static build finished for Python ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android/dist || echo "⚠️ Package output not found"
 
       - name: Verify static binary
@@ -113,3 +114,4 @@ jobs:
           name: python-static-${{ matrix.version }}
           path: cpython-${{ matrix.version }}/cross-build/aarch64-linux-android/dist/python-*.tar.gz
           if-no-files-found: error
+          
