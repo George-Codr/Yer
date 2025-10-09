@@ -3,7 +3,7 @@ name: Build Static Android Python
 on:
   workflow_dispatch:
   push:
-    branches: [main, '3.*']
+    branches: [main, '3.*', Try]
   pull_request:
     branches: [main, '3.*']
 
@@ -32,6 +32,9 @@ jobs:
       RANLIB: llvm-ranlib
       LLVM_PATH: /opt/homebrew/opt/llvm/bin
       ARCH: aarch64
+      CFLAGS: "-fPIC -static"
+      LDFLAGS: "-static"
+      ANDROID_HOME: /Users/runner/Library/Android/sdk
 
     steps:
       - name: Checkout repository
@@ -45,6 +48,11 @@ jobs:
           brew uninstall gcc || true
           echo "$LLVM_PATH" >> $GITHUB_PATH
           export PATH="$LLVM_PATH:$PATH"
+          # Set up Android SDK
+          curl -L https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip -o cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_HOME
+          yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+          $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools"
 
       - name: Cache LLVM and dependencies
         uses: actions/cache@v4
@@ -72,44 +80,29 @@ jobs:
           git apply ./termux.patch || echo "⚠️ termux.patch apply failed — continuing."
           git apply ./as13.patch || echo "⚠️ as13.patch apply failed — continuing."
 
-      - name: Configure CPython for static build
-        working-directory: ./cpython-${{ matrix.version }}
+      - name: Build static CPython for Android
+        working-directory: ./cpython-${{ matrix.version }}/Android
         run: |
           set -euxo pipefail
-          export CFLAGS="-fPIC -static"
-          export LDFLAGS="-static"
-          ./configure \
-            --host=aarch64-linux-android \
-            --build=x86_64-apple-darwin \
-            --prefix=/python-static \
-            --enable-optimizations \
-            --with-static-libpython \
-            --without-shared \
-            --with-ensurepip=install
-          echo "✅ Configuration finished for version ${{ matrix.version }}"
-
-      - name: Build CPython statically
-        working-directory: ./cpython-${{ matrix.version }}
-        run: |
-          set -euxo pipefail
-          make -j$(nproc)
-          make install DESTDIR=$(pwd)/install
+          ./android.py ci --fast-ci aarch64-linux-android -- --without-shared --without-static-libpython
           echo "✅ Static build finished for version ${{ matrix.version }}"
-          ls -lh ./install/python-static || echo "⚠️ Build output not found"
+          ls -lh ../cross-build/aarch64-linux-android/dist || echo "⚠️ Package output not found"
 
-      - name: Package as tar.gz
+      - name: Verify static binary
+        working-directory: ./cpython-${{ matrix.version }}/cross-build/aarch64-linux-android
         run: |
           set -euxo pipefail
-          VERSION="${{ matrix.version }}"
-          PKG_NAME="python-static-${VERSION}"
-          ARCH="aarch64"
-          INSTALL_DIR="./cpython-${VERSION}/install/python-static"
-          tar -czf "${PKG_NAME}_${VERSION}_${ARCH}.tar.gz" -C "$INSTALL_DIR" .
-          echo "✅ Packaged ${PKG_NAME}_${VERSION}_${ARCH}.tar.gz"
+          BINARY=$(find prefix -name python -type f -executable || find install -name python -type f -executable)
+          if [ -z "$BINARY" ]; then
+            echo "⚠️ Python binary not found"
+            exit 1
+          fi
+          file "$BINARY" | grep -q "statically linked" || (echo "⚠️ Binary is not statically linked" && exit 1)
+          echo "✅ Verified static binary: $BINARY"
 
       - name: Upload static Python archive
         uses: actions/upload-artifact@v4
         with:
           name: python-static-${{ matrix.version }}
-          path: python-static-*_${{ matrix.version }}_aarch64.tar.gz
+          path: cpython-${{ matrix.version }}/cross-build/aarch64-linux-android/dist/python-*.tar.gz
           if-no-files-found: error
