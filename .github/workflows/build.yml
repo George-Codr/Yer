@@ -59,7 +59,17 @@ jobs:
           brew install llvm@${LLVM_VERSION} dpkg mpdecimal readline || true
 
           export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
+          
+          # Detect the correct NDK toolchain architecture
+          if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
+            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
+          elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
+            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
+          else
+            echo "⚠️ NDK toolchain not found; will use system clang instead."
+            export TOOLCHAIN="/usr/bin"
+          fi
+
           export LLVM_PATH="/opt/homebrew/opt/llvm@${LLVM_VERSION}/bin"
 
           echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
@@ -67,8 +77,16 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$LLVM_PATH" >> $GITHUB_PATH
 
-          export CC="$TOOLCHAIN/bin/aarch64-linux-android24-clang"
-          export CXX="$TOOLCHAIN/bin/aarch64-linux-android24-clang++"
+          # Use SDK/NDK clang if available, otherwise fallback to system or Homebrew LLVM clang
+          if [ -x "$TOOLCHAIN/bin/clang" ]; then
+            export CC="$TOOLCHAIN/bin/clang"
+            export CXX="$TOOLCHAIN/bin/clang++"
+          else
+            echo "⚠️ Using fallback clang from PATH"
+            export CC=$(command -v clang)
+            export CXX=$(command -v clang++)
+          fi
+
           export AR="$LLVM_PATH/llvm-ar"
           export LD="$LLVM_PATH/ld.lld"
           export NM="$LLVM_PATH/llvm-nm"
@@ -77,6 +95,7 @@ jobs:
           echo "✅ Using Clang from SDK/NDK and LLVM ${LLVM_VERSION} from Homebrew."
           $CC --version
           $LLVM_PATH/llvm-ar --version
+
 
       - name: Cache LLVM and dependencies
         uses: actions/cache@v4
