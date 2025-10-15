@@ -1,0 +1,103 @@
+name: Build and Release Custom LLVM 21 for Android NDK r29
+
+on:
+  push:
+    branches:  # Trigger build on every push to any branch
+      - 'rew'   # This runs the full workflow (including release if tagged)
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 build-essential git cmake ninja-build curl unzip libxml2-dev pkg-config zlib1g-dev
+
+      - name: Download Android NDK r29
+        run: |
+          curl -o android-ndk-r29-linux.zip https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          unzip android-ndk-r29-linux.zip -d $HOME
+          export NDK=$HOME/android-ndk-r29
+          echo "NDK=$NDK" >> $GITHUB_ENV
+
+      - name: Clone Android NDK source for patches
+        run: |
+          git clone https://github.com/android/ndk.git
+          cd ndk
+          git checkout r29
+
+      - name: Clone Android LLVM project
+        run: |
+          git clone https://android.googlesource.com/toolchain/llvm-project llvm-project-android
+          cd llvm-project-android
+          git checkout llvmorg-21.1.0  # Updated to stable LLVM 21 release branch (adjust if needed for latest)
+          git submodule update --init --recursive
+
+      - name: Apply Android-specific patches
+        run: |
+          cd $GITHUB_WORKSPACE/ndk
+          ./build/tools/apply-llvm-patches.py --llvm-path $GITHUB_WORKSPACE/llvm-project-android --revision r29
+
+      - name: Configure LLVM build
+        run: |
+          cd $GITHUB_WORKSPACE/llvm-project-android
+          mkdir build && cd build
+          cmake ../llvm \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_PROJECTS="clang;lld;compiler-rt;libcxx;libcxxabi" \
+            -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
+            -DLLVM_ENABLE_RUNTIMES="libcxx" \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/llvm21-install \
+            -DCMAKE_C_COMPILER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang \
+            -DCMAKE_CXX_COMPILER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ \
+            -DANDROID_NDK=$NDK \
+            -DLLVM_ANDROID_USE_NDK_SYSROOT=ON \
+            -DLLVM_USE_LINKER=lld \
+            -DCMAKE_MAKE_PROGRAM=ninja
+
+      - name: Build and install LLVM
+        run: |
+          cd $GITHUB_WORKSPACE/llvm-project-android/build
+          ninja -j$(nproc)
+          ninja install
+
+      - name: Package the build
+        run: |
+          cd $GITHUB_WORKSPACE
+          tar -czf llvm21-android-ndk-r29-linux.tar.gz llvm21-install
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm21-build
+          path: llvm21-android-ndk-r29-linux.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    #if: startsWith(github.ref, 'refs/tags/')  # Only create release if push was to a tag
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: llvm21-build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: llvm21-android-ndk-r29-linux.tar.gz
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            Custom LLVM 21 build for Android NDK r29 (Linux host).
+            Includes Android patches and optimizations.
+          draft: false
+          prerelease: false
