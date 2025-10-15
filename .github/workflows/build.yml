@@ -53,49 +53,34 @@ jobs:
           echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
 
-      - name: Set environment to use SDK/NDK Clang and install LLVM 21
+      - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
-          brew install llvm@${LLVM_VERSION} dpkg mpdecimal readline || true
 
           export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          
-          # Detect the correct NDK toolchain architecture
           if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
           elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
           else
-            echo "⚠️ NDK toolchain not found; will use system clang instead."
+            echo "⚠️ NDK toolchain not found; using system clang instead"
             export TOOLCHAIN="/usr/bin"
           fi
-
-          export LLVM_PATH="/opt/homebrew/opt/llvm@${LLVM_VERSION}/bin"
-
-          echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
-          echo "LLVM_PATH=$LLVM_PATH" >> $GITHUB_ENV
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-          echo "$LLVM_PATH" >> $GITHUB_PATH
-
-          # Use SDK/NDK clang if available, otherwise fallback to system or Homebrew LLVM clang
-          if [ -x "$TOOLCHAIN/bin/clang" ]; then
-            export CC="$TOOLCHAIN/bin/clang"
-            export CXX="$TOOLCHAIN/bin/clang++"
+          if [ -x "$TOOLCHAIN/bin/aarch64-linux-android24-clang" ]; then
+            export CC="$TOOLCHAIN/bin/aarch64-linux-android24-clang"
+            export CXX="$TOOLCHAIN/bin/aarch64-linux-android24-clang++"
           else
-            echo "⚠️ Using fallback clang from PATH"
             export CC=$(command -v clang)
             export CXX=$(command -v clang++)
           fi
-
-          export AR="$LLVM_PATH/llvm-ar"
-          export LD="$LLVM_PATH/ld.lld"
-          export NM="$LLVM_PATH/llvm-nm"
-          export RANLIB="$LLVM_PATH/llvm-ranlib"
-
-          echo "✅ Using Clang from SDK/NDK and LLVM ${LLVM_VERSION} from Homebrew."
+          export AR="$TOOLCHAIN/bin/llvm-ar"
+          export LD="$TOOLCHAIN/bin/ld.lld"
+          export NM="$TOOLCHAIN/bin/llvm-nm"
+          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+          echo "✅ Using Clang from SDK/NDK"
           $CC --version
-          $LLVM_PATH/llvm-ar --version
-
+          $AR --version
 
       - name: Cache LLVM and dependencies
         uses: actions/cache@v4
