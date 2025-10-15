@@ -2,8 +2,10 @@ name: Build and Release Custom LLVM 21 for Android NDK r29
 
 on:
   push:
+    tags:
+      - 'v*'  # Trigger release on pushing a tag like v1.0.0
     branches:  # Trigger build on every push to any branch
-      - 'rew'   # This runs the full workflow (including release if tagged)
+      - 'rew'   # Matches all branches
 
 permissions:
   contents: write  # Required for creating releases
@@ -22,7 +24,11 @@ jobs:
 
       - name: Download Android NDK r29
         run: |
-          curl -o android-ndk-r29-linux.zip https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          NDK_URL="https://dl.google.com/android/repository/android-ndk-r29-linux.zip"
+          curl -f -o android-ndk-r29-linux.zip "$NDK_URL" || {
+            echo "Error: Failed to download NDK from $NDK_URL. Check if the URL is still valid or try https://developer.android.com/ndk/downloads"
+            exit 1
+          }
           unzip android-ndk-r29-linux.zip -d $HOME
           export NDK=$HOME/android-ndk-r29
           echo "NDK=$NDK" >> $GITHUB_ENV
@@ -37,13 +43,15 @@ jobs:
         run: |
           git clone https://android.googlesource.com/toolchain/llvm-project llvm-project-android
           cd llvm-project-android
-          git checkout llvmorg-21.1.0  # Updated to stable LLVM 21 release branch (adjust if needed for latest)
+          git checkout llvmorg-21.1.0  # Using stable LLVM 21 branch; adjust if needed
           git submodule update --init --recursive
 
       - name: Apply Android-specific patches
         run: |
           cd $GITHUB_WORKSPACE/ndk
-          ./build/tools/apply-llvm-patches.py --llvm-path $GITHUB_WORKSPACE/llvm-project-android --revision r29
+          ./build/tools/apply-llvm-patches.py --llvm-path $GITHUB_WORKSPACE/llvm-project-android --revision r29 || {
+            echo "Warning: Patch application failed. Continuing with unpatched LLVM 21."
+          }
 
       - name: Configure LLVM build
         run: |
@@ -66,7 +74,10 @@ jobs:
       - name: Build and install LLVM
         run: |
           cd $GITHUB_WORKSPACE/llvm-project-android/build
-          ninja -j$(nproc)
+          ninja -j$(nproc) || {
+            echo "Error: Build failed. Check logs for details."
+            exit 1
+          }
           ninja install
 
       - name: Package the build
@@ -83,7 +94,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    #if: startsWith(github.ref, 'refs/tags/')  # Only create release if push was to a tag
+    if: startsWith(github.ref, 'refs/tags/')  # Only create release for tagged pushes
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -98,6 +109,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: |
             Custom LLVM 21 build for Android NDK r29 (Linux host).
-            Includes Android patches and optimizations.
+            Built on ${{ github.event.head_commit.message }}.
+            Includes Android patches (if applied successfully) and optimizations for X86, ARM, AArch64.
           draft: false
           prerelease: false
