@@ -111,12 +111,17 @@ jobs:
           FILE="${{ matrix.filename }}"
           FOLDER="${{ matrix.folder }}"
           VERSION="${{ matrix.version }}"
-          SECRET_NAME="${{ matrix.url_secret }}"
 
-          # Read secret dynamically
-          URL=$(jq -r ".${SECRET_NAME}" <<< "${{ toJson(secrets) }}")
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "❌ Secret $SECRET_NAME not set. Skipping build."
+          # Select correct secret directly by version
+          case "$VERSION" in
+            3.13.9) URL="${{ secrets.PY313_URL }}" ;;
+            3.14.0) URL="${{ secrets.PY314_URL }}" ;;
+            3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
+            *) echo "❌ Unknown version $VERSION"; exit 1 ;;
+          esac
+
+          if [ -z "$URL" ]; then
+            echo "❌ Secret for version $VERSION not set."
             exit 1
           fi
 
@@ -124,6 +129,8 @@ jobs:
           curl -L "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
+          
+
 
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
