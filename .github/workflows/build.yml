@@ -9,6 +9,7 @@ on:
 
 jobs:
   build-template:
+    if: ${{ github.repository_owner == 'George-Codr' && github.event.repository.name == 'Yer' }}
     name: Build Android Python (${{ matrix.version }})
     runs-on: macos-14
     timeout-minutes: 90
@@ -16,64 +17,104 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - version: 3.13
-            branch: 3.13
-          - version: 3.14
-            branch: 3.14
-          - version: 3.15
-            branch: main
+          - version: 3.13.9
+            filename: Python-3.13.9.tgz
+            folder: Python-3.13.9
+            url_secret: PY313_URL
+          - version: 3.14.0
+            filename: Python-3.14.0.tgz
+            folder: Python-3.14.0
+            url_secret: PY314_URL
+          - version: 3.15.0a1
+            filename: Python-3.15.0a1.tgz
+            folder: Python-3.15.0a1
+            url_secret: PY315_URL
 
     env:
-      CC: clang
-      CXX: clang++
-      LD: clang
-      AR: llvm-ar
-      NM: llvm-nm
-      RANLIB: llvm-ranlib
-      LLVM_PATH: /opt/homebrew/opt/llvm/bin
       ARCH: aarch64
+      ANDROID_NDK_VERSION: 27.0.12077973
+      LLVM_VERSION: 21
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (locked)
         uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/${{ github.event.repository.name }}
+          ref: ${{ github.ref }}
+          fetch-depth: 1
 
-      - name: Set up environment
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
         run: |
           set -euxo pipefail
-          brew update
-          brew install readline llvm lld dpkg mpdecimal || true
-          brew uninstall gcc || true
+          sdkmanager "ndk;${ANDROID_NDK_VERSION}"
+          echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
+          ls -1 $ANDROID_HOME/ndk/
+
+      - name: Set environment to use SDK/NDK Clang and install LLVM 21
+        run: |
+          set -euxo pipefail
+          brew install llvm@${LLVM_VERSION} dpkg mpdecimal readline || true
+
+          export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
+          export LLVM_PATH="/opt/homebrew/opt/llvm@${LLVM_VERSION}/bin"
+
+          echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
+          echo "LLVM_PATH=$LLVM_PATH" >> $GITHUB_ENV
+          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$LLVM_PATH" >> $GITHUB_PATH
-          export PATH="$LLVM_PATH:$PATH"
+
+          export CC="$TOOLCHAIN/bin/aarch64-linux-android24-clang"
+          export CXX="$TOOLCHAIN/bin/aarch64-linux-android24-clang++"
+          export AR="$LLVM_PATH/llvm-ar"
+          export LD="$LLVM_PATH/ld.lld"
+          export NM="$LLVM_PATH/llvm-nm"
+          export RANLIB="$LLVM_PATH/llvm-ranlib"
+
+          echo "✅ Using Clang from SDK/NDK and LLVM ${LLVM_VERSION} from Homebrew."
+          $CC --version
+          $LLVM_PATH/llvm-ar --version
 
       - name: Cache LLVM and dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar/llvm
-          key: llvm-${{ runner.os }}-${{ hashFiles('.github/workflows/build-android.yml') }}
+            /opt/homebrew/Cellar/llvm@${{ env.LLVM_VERSION }}
+          key: llvm-${{ runner.os }}-${{ env.LLVM_VERSION }}-${{ hashFiles('.github/workflows/build-android.yml') }}
 
-      - name: Checkout CPython repository
-        uses: actions/checkout@v5
-        with:
-          repository: python/cpython
-          ref: ${{ matrix.branch }}
-          path: cpython-${{ matrix.version }}
-          fetch-depth: 1
-
-
-      - name: Apply patches (only for 3.13)
-        if: matrix.version == '3.13'
-        working-directory: ./cpython-${{ matrix.version }}
+      - name: Download official Python source tarball (from Secret)
         run: |
           set -euxo pipefail
-          curl -L https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
-          curl -L https://raw.githubusercontent.com/plfj/py-build/refs/heads/main/as13.patch -o as13.patch
-          git apply ./as13.patch || echo "⚠️ Patch apply failed — continuing."
+          FILE="${{ matrix.filename }}"
+          FOLDER="${{ matrix.folder }}"
+          VERSION="${{ matrix.version }}"
+          SECRET_NAME="${{ matrix.url_secret }}"
+
+          # Read secret dynamically
+          URL=$(jq -r ".${SECRET_NAME}" <<< "${{ toJson(secrets) }}")
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "❌ Secret $SECRET_NAME not set. Skipping build."
+            exit 1
+          fi
+
+          echo "Downloading Python from $URL"
+          curl -L "$URL" -o "$FILE"
+          tar -xzf "$FILE"
+          mv "$FOLDER" "cpython-${VERSION}"
 
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
+        env:
+          CC: ${{ env.CC }}
+          CXX: ${{ env.CXX }}
+          AR: ${{ env.AR }}
+          LD: ${{ env.LD }}
+          NM: ${{ env.NM }}
+          RANLIB: ${{ env.RANLIB }}
         run: |
           set -euxo pipefail
           ./android.py ci --fast-ci aarch64-linux-android
@@ -100,7 +141,7 @@ jobs:
           Version: $PKG_VERSION
           Architecture: $ARCH
           Maintainer: Cross-compiled by NotFound
-          Description: Python $PKG_VERSION cross-compiled for Termux aarch64
+          Description: Python $PKG_VERSION cross-compiled for Termux aarch64 using SDK Clang + LLVM ${LLVM_VERSION}
           EOF
 
           cat > "$DEB_DIR/DEBIAN/postinst" <<EOF
