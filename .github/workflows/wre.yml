@@ -5,7 +5,7 @@ on:
     tags:
       - 'llvm*'  # Trigger release on pushing a tag like v1.0.0
     branches:  # Trigger build on every push to any branch
-      - '**'   # Matches all branches
+      - 'rew'   # Matches all branches
 
 permissions:
   contents: write  # Required for creating releases
@@ -72,9 +72,9 @@ jobs:
           cmake ../llvm \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLLVM_ENABLE_PROJECTS="clang;lld;compiler-rt;libcxx;libcxxabi" \
+            -DLLVM_ENABLE_PROJECTS="clang;lld;compiler-rt" \
+            -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
             -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
-            -DLLVM_ENABLE_RUNTIMES="libcxx" \
             -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/llvm21-install \
             -DCMAKE_C_COMPILER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang \
             -DCMAKE_CXX_COMPILER=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ \
