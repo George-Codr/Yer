@@ -175,6 +175,5 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: pyv${{ matrix.version }}-ndk${{ matrix.ndk_major }}
           path: pyv*_${{ matrix.version }}_aarch64.deb
           if-no-files-found: error
