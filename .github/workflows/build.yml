@@ -52,7 +52,8 @@ jobs:
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
           echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
-
+      - name: Install dpkg
+        run: brew install dpkg
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
