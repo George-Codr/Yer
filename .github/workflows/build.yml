@@ -10,7 +10,7 @@ on:
 jobs:
   build-template:
     if: ${{ github.repository_owner == 'George-Codr' && github.event.repository.name == 'Yer' }}
-    name: Build Android Python (${{ matrix.version }})
+    name: Build Android Python (${{ matrix.version }}) NDK ${{ matrix.ndk_major }}
     runs-on: macos-14
     timeout-minutes: 90
     strategy:
@@ -21,18 +21,42 @@ jobs:
             filename: Python-3.13.9.tgz
             folder: Python-3.13.9
             url_secret: PY313_URL
+            ndk_version: 27.0.12077973
+            ndk_major: 27
           - version: 3.14.0
             filename: Python-3.14.0.tgz
             folder: Python-3.14.0
             url_secret: PY314_URL
+            ndk_version: 27.0.12077973
+            ndk_major: 27
           - version: 3.15.0a1
             filename: Python-3.15.0a1.tgz
             folder: Python-3.15.0a1
             url_secret: PY315_URL
+            ndk_version: 27.0.12077973
+            ndk_major: 27
+          - version: 3.13.9
+            filename: Python-3.13.9.tgz
+            folder: Python-3.13.9
+            url_secret: PY313_URL
+            ndk_version: 29.0.14206865
+            ndk_major: 29
+          - version: 3.14.0
+            filename: Python-3.14.0.tgz
+            folder: Python-3.14.0
+            url_secret: PY314_URL
+            ndk_version: 29.0.14206865
+            ndk_major: 29
+          - version: 3.15.0a1
+            filename: Python-3.15.0a1.tgz
+            folder: Python-3.15.0a1
+            url_secret: PY315_URL
+            ndk_version: 29.0.14206865
+            ndk_major: 29
 
     env:
       ARCH: aarch64
-      ANDROID_NDK_VERSION: 27.0.12077973
+      ANDROID_NDK_VERSION: ${{ matrix.ndk_version }}
       LLVM_VERSION: 21
 
     steps:
@@ -52,8 +76,7 @@ jobs:
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
           echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
-      - name: Install dpkg
-        run: brew install dpkg
+
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
@@ -82,7 +105,8 @@ jobs:
           echo "✅ Using Clang from SDK/NDK"
           $CC --version
           $AR --version
-
+      - name: Install dpkg
+        run: brew install dpkg
       - name: Cache LLVM and dependencies
         uses: actions/cache@v4
         with:
@@ -117,7 +141,6 @@ jobs:
           mv "$FOLDER" "cpython-${VERSION}"
           
 
-
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
@@ -137,7 +160,8 @@ jobs:
         run: |
           set -euxo pipefail
           VERSION="${{ matrix.version }}"
-          PKG_NAME="pyv${VERSION//./}"
+          NDK_MAJOR="${{ matrix.ndk_major }}"
+          PKG_NAME="pyv${VERSION//./}-ndk${NDK_MAJOR}"
           PKG_VERSION="$VERSION"
           ARCH="aarch64"
           BUILD_DIR="./cpython-${VERSION}/cross-build/${ARCH}-linux-android"
@@ -153,7 +177,7 @@ jobs:
           Version: $PKG_VERSION
           Architecture: $ARCH
           Maintainer: Cross-compiled by NotFound
-          Description: Python $PKG_VERSION cross-compiled for Termux aarch64 using SDK Clang + LLVM ${LLVM_VERSION}
+          Description: Python $PKG_VERSION cross-compiled for Termux aarch64 using SDK Clang + LLVM ${LLVM_VERSION} with NDK r${NDK_MAJOR}
           EOF
 
           cat > "$DEB_DIR/DEBIAN/postinst" <<EOF
@@ -169,6 +193,6 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: pyv${{ matrix.version }}
+          name: pyv${{ matrix.version }}-ndk${{ matrix.ndk_major }}
           path: pyv*_${{ matrix.version }}_aarch64.deb
           if-no-files-found: error
