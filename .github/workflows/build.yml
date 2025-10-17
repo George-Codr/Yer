@@ -21,24 +21,6 @@ jobs:
             filename: Python-3.13.9.tgz
             folder: Python-3.13.9
             url_secret: PY313_URL
-            ndk_version: 27.0.12077973
-            ndk_major: 27
-          - version: 3.14.0
-            filename: Python-3.14.0.tgz
-            folder: Python-3.14.0
-            url_secret: PY314_URL
-            ndk_version: 27.0.12077973
-            ndk_major: 27
-          - version: 3.15.0a1
-            filename: Python-3.15.0a1.tgz
-            folder: Python-3.15.0a1
-            url_secret: PY315_URL
-            ndk_version: 27.0.12077973
-            ndk_major: 27
-          - version: 3.13.9
-            filename: Python-3.13.9.tgz
-            folder: Python-3.13.9
-            url_secret: PY313_URL
             ndk_version: 29.0.14206865
             ndk_major: 29
           - version: 3.14.0
