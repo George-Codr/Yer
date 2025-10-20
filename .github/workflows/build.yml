@@ -75,8 +75,8 @@ jobs:
           fi
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           if [ -x "$TOOLCHAIN/bin/aarch64-linux-android24-clang" ]; then
-            export CC="$TOOLCHAIN/bin/aarch64-linux-android24-clang"
-            export CXX="$TOOLCHAIN/bin/aarch64-linux-android24-clang++"
+            export CC="/Users/runner/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang"
+            export CXX="/Users/runner/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++"
           else
             export CC=$(command -v clang)
             export CXX=$(command -v clang++)
@@ -90,14 +90,7 @@ jobs:
           $AR --version
       - name: Install dpkg
         run: brew install dpkg
-      - name: Cache LLVM and dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar/llvm@${{ env.LLVM_VERSION }}
-          key: llvm-${{ runner.os }}-${{ env.LLVM_VERSION }}-${{ hashFiles('.github/workflows/build-android.yml') }}
-
+   
       - name: Download official Python source tarball (from Secret)
         run: |
           set -euxo pipefail
