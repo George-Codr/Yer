@@ -1,5 +1,4 @@
 name: Build Android
-
 on:
   workflow_dispatch:
   push:
@@ -35,88 +34,54 @@ jobs:
             url_secret: PY315_URL
             ndk_version: 29.0.14206865
             ndk_major: 29
-
     env:
       ARCH: aarch64
       ANDROID_NDK_VERSION: ${{ matrix.ndk_version }}
       LLVM_VERSION: 21
-
     steps:
-      - name: Checkout repository (locked)
+      - name: Checkout repository
         uses: actions/checkout@v5
         with:
           repository: ${{ github.repository_owner }}/${{ github.event.repository.name }}
           ref: ${{ github.ref }}
           fetch-depth: 1
-
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android NDK
         run: |
           set -euxo pipefail
-          find /Users/runner/Library/Android/sdk/ndk -maxdepth 1 -mindepth 1 ! -name '29*' -exec rm -rf {} +
+          find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 ! -name '29*' -exec rm -rf {} +
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
-          echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
-
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
-
-          export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
-            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
-          elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
-            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
-          else
-            echo "⚠️ NDK toolchain not found; using system clang instead"
-            export TOOLCHAIN="/usr/bin"
-          fi
+          NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
+          CC="$TOOLCHAIN/bin/clang"
+          CXX="$TOOLCHAIN/bin/clang++"
+          AR="$TOOLCHAIN/bin/llvm-ar"
+          LD="$TOOLCHAIN/bin/ld.lld"
+          NM="$TOOLCHAIN/bin/llvm-nm"
+          RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-          if [ -x "$TOOLCHAIN/bin/aarch64-linux-android24-clang" ]; then
-            export CC="/Users/runner/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang"
-            export CXX="/Users/runner/Library/Android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++"
-          else
-            export CC=$(command -v clang)
-            export CXX=$(command -v clang++)
-          fi
-          export AR="$TOOLCHAIN/bin/llvm-ar"
-          export LD="$TOOLCHAIN/bin/ld.lld"
-          export NM="$TOOLCHAIN/bin/llvm-nm"
-          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          echo "✅ Using Clang from SDK/NDK"
-          $CC --version
-          $AR --version
       - name: Install dpkg
         run: brew install dpkg
-   
-      - name: Download official Python source tarball (from Secret)
+      - name: Download official Python source
         run: |
           set -euxo pipefail
           FILE="${{ matrix.filename }}"
           FOLDER="${{ matrix.folder }}"
           VERSION="${{ matrix.version }}"
-
-          # Select correct secret directly by version
           case "$VERSION" in
             3.13.9) URL="${{ secrets.PY313_URL }}" ;;
             3.14.0) URL="${{ secrets.PY314_URL }}" ;;
             3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
-            *) echo "❌ Unknown version $VERSION"; exit 1 ;;
+            *) exit 1 ;;
           esac
-
-          if [ -z "$URL" ]; then
-            echo "❌ Secret for version $VERSION not set."
-            exit 1
-          fi
-
-          echo "Downloading Python from $URL"
           curl -L "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
-          
-
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
@@ -129,9 +94,7 @@ jobs:
         run: |
           set -euxo pipefail
           ./android.py ci --fast-ci aarch64-linux-android
-          echo "✅ Build finished for version ${{ matrix.version }}"
-          ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
-
+          ls -lh ../cross-build/aarch64-linux-android || echo "No build output"
       - name: Package as .deb
         run: |
           set -euxo pipefail
@@ -143,11 +106,9 @@ jobs:
           BUILD_DIR="./cpython-${VERSION}/cross-build/${ARCH}-linux-android"
           OUT_DIR=$( [ -d "$BUILD_DIR/prefix" ] && echo "$BUILD_DIR/prefix" || echo "$BUILD_DIR/install" )
           DEB_DIR="$PKG_NAME"
-
           mkdir -p "$DEB_DIR/DEBIAN"
           mkdir -p "$DEB_DIR/usr"
           cp -r "$OUT_DIR"/* "$DEB_DIR/usr/"
-
           cat > "$DEB_DIR/DEBIAN/control" <<EOF
           Package: $PKG_NAME
           Version: $PKG_VERSION
@@ -155,7 +116,6 @@ jobs:
           Maintainer: Cross-compiled by NotFound
           Description: Python $PKG_VERSION cross-compiled for Termux aarch64 using SDK Clang + LLVM ${LLVM_VERSION} with NDK r${NDK_MAJOR}
           EOF
-
           cat > "$DEB_DIR/DEBIAN/postinst" <<EOF
           #!/bin/sh
           set -e
@@ -163,15 +123,11 @@ jobs:
           exit 0
           EOF
           chmod 755 "$DEB_DIR/DEBIAN/postinst"
-
           dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
-
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: pyv___${{ matrix.version }}_aarch64
+          name: pyv${{ matrix.version }}_aarch64
           path: pyv*_${{ matrix.version }}_aarch64.deb
           if-no-files-found: error
           overwrite: true
-
-
