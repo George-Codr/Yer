@@ -82,6 +82,11 @@ jobs:
           curl -L "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
+      - name: Disable remote debugging module for Android
+        if: startsWith(matrix.python_version, '3.14') || startsWith(matrix.python_version, '3.15')
+        run: |
+          echo "*disabled* _remote_debugging_module" > cpython-$PYTHON_VERSION/Modules/Setup.local
+   
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
