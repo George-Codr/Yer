@@ -55,6 +55,7 @@ jobs:
       - name: Install Android NDK
         run: |
           set -euxo pipefail
+          find /Users/runner/Library/Android/sdk/ndk -maxdepth 1 -mindepth 1 ! -name '29*' -exec rm -rf {} +
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
           echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
