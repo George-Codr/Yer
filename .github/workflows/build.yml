@@ -93,6 +93,8 @@ jobs:
           RANLIB: ${{ env.RANLIB }}
         run: |
           set -euxo pipefail
+          rm -rf android-env.sh
+          wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           ./android.py ci --fast-ci aarch64-linux-android
           ls -lh ../cross-build/aarch64-linux-android || echo "No build output"
       - name: Package as .deb
