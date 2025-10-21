@@ -1,0 +1,465 @@
+diff --git a/Python/remote_debug.h b/Python/remote_debug.h
+index abcdef1..abcdef2 100644
+--- a/Python/remote_debug.h
++++ b/Python/remote_debug.h
+@@ -883,6 +883,312 @@ static uintptr_t search_linux_map_for_section(void *handle, const char *section
+ 
+ #if defined(__ANDROID__) || (defined(__linux__) && !defined(HAVE_PROCESS_VM_READV))
+ 
+ #include <stdio.h>
+ #include <string.h>
+ #include <stdint.h>
+ #include <stdlib.h>
+ #include <elf.h>
+ #include <errno.h>
+ #include <stdbool.h>
++#include <limits.h>
++
++/**
++ * Structure to hold memory mapping information from /proc/pid/maps
++ */
++struct map_info {
++    uintptr_t start;        /* Starting address of memory mapping */
++    uintptr_t end;          /* Ending address of memory mapping */
++    unsigned long offset;   /* Offset in the mapped file */
++    char perms[5];          /* Permissions: rwxp format */
++    char path[PATH_MAX];    /* Path to the mapped file */
++};
++
++/**
++ * Validates that a memory mapping has the required permissions for a section.
++ * 
++ * @param perms: Permission string from /proc/pid/maps (e.g., "r-xp")
++ * @param sh_flags: Section flags from ELF section header
++ * @return: true if permissions are compatible, false otherwise
++ */
++static bool
++validate_section_permissions(const char *perms, Elf64_Word sh_flags)
++{
++    if (!perms || strlen(perms) < 3) {
++        return false;
++    }
++
++    bool needs_write = (sh_flags & SHF_WRITE) != 0;
++    bool needs_exec = (sh_flags & SHF_EXECINSTR) != 0;
++    bool has_read = (perms[0] == 'r');
++    bool has_write = (perms[1] == 'w');
++    bool has_exec = (perms[2] == 'x');
++
++    /* Readable mappings are generally required */
++    if (!has_read) {
++        return false;
++    }
++
++    /* Check if mapping has required write permission */
++    if (needs_write && !has_write) {
++        return false;
++    }
++
++    /* Check if mapping has required execute permission */
++    if (needs_exec && !has_exec) {
++        return false;
++    }
++
++    return true;
++}
++
++/**
++ * Reads and parses /proc/pid/maps to extract memory mappings for a specific binary.
++ * 
++ * @param pid: Process ID to read mappings from
++ * @param binary_name: Name of binary to filter mappings (or NULL for all)
++ * @param out_num_maps: Output parameter for number of mappings found
++ * @return: Dynamically allocated array of map_info structures, or NULL on error
++ */
++static struct map_info *
++read_process_maps(pid_t pid, const char *binary_name, size_t *out_num_maps)
++{
++    char maps_path[64];
++    int ret = snprintf(maps_path, sizeof(maps_path), "/proc/%d/maps", (int)pid);
++    if (ret < 0 || ret >= (int)sizeof(maps_path)) {
++        PyErr_SetString(PyExc_ValueError, "Invalid process ID");
++        return NULL;
++    }
++    
++    FILE *maps = fopen(maps_path, "r");
++    if (!maps) {
++        PyErr_SetFromErrno(PyExc_OSError);
++        return NULL;
++    }
++
++    char line[2048];
++    struct map_info *maps_list = NULL;
++    size_t num_maps = 0;
++    size_t capacity = 0;
++
++    while (fgets(line, sizeof(line), maps)) {
++        uintptr_t start, end;
++        unsigned long offset;
++        char perms[5];
++        char dev[6];
++        unsigned long inode;
++        char path[PATH_MAX] = {0};
++        
++        int fields = sscanf(line, "%lx-%lx %4s %lx %5s %lu %4095s",
++                           &start, &end, perms, &offset, dev, &inode, path);
++        
++        /* Need at least 6 fields for valid mapping */
++        if (fields < 6) {
++            continue;
++        }
++
++        /* Validate address range */
++        if (start >= end) {
++            continue;
++        }
++        
++        /* Only include mappings for the target binary if specified */
++        if (binary_name && path[0] != '\0' && strstr(path, binary_name) == NULL) {
++            continue;
++        }
++
++        /* Skip if path is required but empty */
++        if (binary_name && path[0] == '\0') {
++            continue;
++        }
++
++        /* Expand array if needed */
++        if (num_maps >= capacity) {
++            size_t new_capacity = capacity ? capacity * 2 : 16;
++            
++            /* Check for overflow */
++            if (new_capacity > SIZE_MAX / sizeof(struct map_info)) {
++                fclose(maps);
++                free(maps_list);
++                PyErr_SetString(PyExc_MemoryError, "Too many mappings");
++                return NULL;
++            }
++            
++            struct map_info *new_list = realloc(maps_list, new_capacity * sizeof(struct map_info));
++            if (!new_list) {
++                fclose(maps);
++                free(maps_list);
++                PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for maps list");
++                return NULL;
++            }
++            maps_list = new_list;
++            capacity = new_capacity;
++        }
++
++        /* Store mapping information */
++        maps_list[num_maps].start = start;
++        maps_list[num_maps].end = end;
++        maps_list[num_maps].offset = offset;
++        
++        /* Safely copy permissions */
++        strncpy(maps_list[num_maps].perms, perms, 4);
++        maps_list[num_maps].perms[4] = '\0';
++        
++        /* Safely copy path */
++        strncpy(maps_list[num_maps].path, path, sizeof(maps_list[num_maps].path) - 1);
++        maps_list[num_maps].path[sizeof(maps_list[num_maps].path) - 1] = '\0';
++        
++        num_maps++;
++    }
++    
++    fclose(maps);
++    *out_num_maps = num_maps;
++    return maps_list;
++}
++
++/**
++ * Searches for a named section in an ELF file and maps it to a memory address.
++ * 
++ * @param elf_path: Path to the ELF binary file
++ * @param section_name: Name of section to find (e.g., ".data", "PyRuntime")
++ * @param maps_list: Array of memory mappings for the binary
++ * @param num_maps: Number of entries in maps_list
++ * @return: Virtual memory address of the section, or 0 if not found
++ */
++static uintptr_t
++find_section_in_elf(const char *elf_path, const char *section_name,
++                    struct map_info *maps_list, size_t num_maps)
++{
++    if (!elf_path || !section_name || !maps_list || num_maps == 0) {
++        PyErr_SetString(PyExc_ValueError, "Invalid parameters to find_section_in_elf");
++        return 0;
++    }
++
++    FILE *elf_file = fopen(elf_path, "rb");
++    if (!elf_file) {
++        PyErr_SetFromErrnoWithFilename(PyExc_OSError, elf_path);
++        return 0;
++    }
++
++    /* Read and validate ELF header */
++    Elf64_Ehdr ehdr;
++    if (fread(&ehdr, sizeof(ehdr), 1, elf_file) != 1) {
++        fclose(elf_file);
++        PyErr_Format(PyExc_IOError, "Failed to read ELF header from: %s", elf_path);
++        return 0;
++    }
++
++    /* Verify ELF magic number */
++    if (memcmp(ehdr.e_ident, ELFMAG, SELFMAG) != 0) {
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Invalid ELF magic in: %s", elf_path);
++        return 0;
++    }
++
++    /* Check ELF class (32-bit vs 64-bit) */
++    if (ehdr.e_ident[EI_CLASS] != ELFCLASS64) {
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Only 64-bit ELF supported, got class %d in: %s",
++                     ehdr.e_ident[EI_CLASS], elf_path);
++        return 0;
++    }
++
++    /* Verify ELF type (executable or shared object) */
++    if (ehdr.e_type != ET_EXEC && ehdr.e_type != ET_DYN) {
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Unsupported ELF type %d in: %s", ehdr.e_type, elf_path);
++        return 0;
++    }
++
++    /* Validate section header table parameters */
++    if (ehdr.e_shnum == 0 || ehdr.e_shentsize != sizeof(Elf64_Shdr)) {
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Invalid section header table in: %s", elf_path);
++        return 0;
++    }
++
++    /* Read section headers */
++    if (fseek(elf_file, ehdr.e_shoff, SEEK_SET) != 0) {
++        fclose(elf_file);
++        PyErr_SetFromErrnoWithFilename(PyExc_OSError, elf_path);
++        return 0;
++    }
++
++    Elf64_Shdr *shdrs = malloc(ehdr.e_shnum * sizeof(Elf64_Shdr));
++    if (!shdrs) {
++        fclose(elf_file);
++        PyErr_SetString(PyExc_MemoryError, "Failed to allocate section headers");
++        return 0;
++    }
++
++    if (fread(shdrs, sizeof(Elf64_Shdr), ehdr.e_shnum, elf_file) != ehdr.e_shnum) {
++        free(shdrs);
++        fclose(elf_file);
++        PyErr_Format(PyExc_IOError, "Failed to read section headers from: %s", elf_path);
++        return 0;
++    }
++
++    /* Validate and get section string table */
++    if (ehdr.e_shstrndx == SHN_UNDEF || ehdr.e_shstrndx >= ehdr.e_shnum) {
++        free(shdrs);
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Invalid section string table index in: %s", elf_path);
++        return 0;
++    }
++
++    Elf64_Shdr shstr_hdr = shdrs[ehdr.e_shstrndx];
++    
++    /* Validate string table size */
++    if (shstr_hdr.sh_size == 0 || shstr_hdr.sh_size > 10485760) {  /* 10MB limit */
++        free(shdrs);
++        fclose(elf_file);
++        PyErr_Format(PyExc_ValueError, "Invalid section string table size in: %s", elf_path);
++        return 0;
++    }
++
++    char *shstrtab = malloc(shstr_hdr.sh_size);
++    if (!shstrtab) {
++        free(shdrs);
++        fclose(elf_file);
++        PyErr_SetString(PyExc_MemoryError, "Failed to allocate section string table");
++        return 0;
++    }
++
++    if (fseek(elf_file, shstr_hdr.sh_offset, SEEK_SET) != 0 ||
++        fread(shstrtab, shstr_hdr.sh_size, 1, elf_file) != 1) {
++        free(shstrtab);
++        free(shdrs);
++        fclose(elf_file);
++        PyErr_SetFromErrnoWithFilename(PyExc_OSError, elf_path);
++        return 0;
++    }
++
++    /* Search for the target section and map it to memory address */
++    uintptr_t address = 0;
++    
++    for (unsigned int i = 0; i < ehdr.e_shnum; i++) {
++        /* Validate section name offset */
++        if (shdrs[i].sh_name >= shstr_hdr.sh_size) {
++            continue;
++        }
++        
++        char *name = shstrtab + shdrs[i].sh_name;
++        
++        /* Ensure null termination within bounds */
++        size_t max_len = shstr_hdr.sh_size - shdrs[i].sh_name;
++        if (strnlen(name, max_len) == max_len) {
++            continue;
++        }
++        
++        if (strcmp(name, section_name) != 0) {
++            continue;
++        }
++
++        /* Found the section, now find its corresponding memory mapping */
++        for (size_t j = 0; j < num_maps; j++) {
++            unsigned long map_offset = maps_list[j].offset;
++            uintptr_t map_start = maps_list[j].start;
++            uintptr_t map_end = maps_list[j].end;
++            uintptr_t map_size = map_end - map_start;
++
++            /* Handle SHT_NOBITS sections (uninitialized data like .bss) */
++            if (shdrs[i].sh_type == SHT_NOBITS) {
++                /* For NOBITS sections, use virtual address */
++                if (shdrs[i].sh_addr >= map_offset &&
++                    shdrs[i].sh_addr < map_offset + map_size &&
++                    shdrs[i].sh_size <= map_size) {
++                    
++                    /* Validate permissions match section requirements */
++                    if (!validate_section_permissions(maps_list[j].perms, shdrs[i].sh_flags)) {
++                        continue;
++                    }
++                    
++                    uintptr_t candidate = map_start + (shdrs[i].sh_addr - map_offset);
++                    
++                    /* Ensure calculated address is within mapping bounds */
++                    if (candidate >= map_start && candidate < map_end) {
++                        address = candidate;
++                        goto found;
++                    }
++                }
++            }
++            /* Handle regular sections (SHT_PROGBITS, etc.) */
++            else {
++                /* For regular sections, use file offset */
++                if (shdrs[i].sh_offset >= map_offset &&
++                    shdrs[i].sh_offset < map_offset + map_size) {
++                    
++                    /* Ensure entire section fits within mapping */
++                    if (shdrs[i].sh_size > 0 &&
++                        shdrs[i].sh_offset + shdrs[i].sh_size > map_offset + map_size) {
++                        continue;
++                    }
++                    
++                    /* Validate permissions match section requirements */
++                    if (!validate_section_permissions(maps_list[j].perms, shdrs[i].sh_flags)) {
++                        continue;
++                    }
++                    
++                    uintptr_t candidate = map_start + (shdrs[i].sh_offset - map_offset);
++                    
++                    /* Ensure calculated address is within mapping bounds */
++                    if (candidate >= map_start && candidate < map_end) {
++                        address = candidate;
++                        goto found;
++                    }
++                }
++            }
++        }
++    }
++
++found:
++    free(shstrtab);
++    free(shdrs);
++    fclose(elf_file);
++    
++    return address;
++}
+ 
+ /**
++ * Main function to search for a section in a process's memory mappings.
++ * This is the Android/limited-Linux implementation that parses ELF files.
++ * 
++ * @param handle: Remote debug handle containing process information
++ * @param section: Name of the ELF section to find
++ * @param binary_name: Name of the binary containing the section
++ * @return: Virtual memory address of the section, or 0 on error
++ */
++static uintptr_t
++search_linux_map_for_section(void *handle, const char *section, const char *binary_name)
++{
++    if (!handle || !section || !binary_name) {
++        PyErr_SetString(PyExc_ValueError, "Invalid parameters to search_linux_map_for_section");
++        return 0;
++    }
++
++    pid_t pid = (pid_t)((_PyRemoteDebugHandle*)handle)->pid;
++    if (pid <= 0) {
++        PyErr_SetString(PyExc_ValueError, "Invalid process ID");
++        return 0;
++    }
++
++    size_t num_maps = 0;
++    
++    /* Read process memory mappings from /proc/pid/maps */
++    struct map_info *maps_list = read_process_maps(pid, binary_name, &num_maps);
++    if (!maps_list) {
++        return 0;  /* Error already set by read_process_maps */
++    }
++
++    if (num_maps == 0) {
++        free(maps_list);
++        PyErr_Format(PyExc_RuntimeError,
++                     "No mappings found for binary containing '%s' in process %d",
++                     binary_name, (int)pid);
++        return 0;
++    }
++
++    /* Use path from first mapping (all mappings should reference same binary) */
++    const char *elf_path = maps_list[0].path;
++    
++    /* Validate that path is not empty */
++    if (elf_path[0] == '\0') {
++        free(maps_list);
++        PyErr_Format(PyExc_RuntimeError,
++                     "Empty path in mapping for binary '%s'", binary_name);
++        return 0;
++    }
++    
++    /* Find section in ELF file and calculate its runtime memory address */
++    uintptr_t address = find_section_in_elf(elf_path, section, maps_list, num_maps);
++    
++    free(maps_list);
++    
++    if (address == 0) {
++        /* Set error if not already set by find_section_in_elf */
++        if (!PyErr_Occurred()) {
++            PyErr_Format(PyExc_RuntimeError,
++                        "Section '%s' not found in mappings for '%s' in process %d",
++                        section, binary_name, (int)pid);
++        }
++    }
++    
++    return address;
++}
++
++#else  /* !__ANDROID__ && (HAVE_PROCESS_VM_READV || !__linux__) */
++
++/**
++ * Placeholder for systems with process_vm_readv support.
++ * The actual implementation would use process_vm_readv for remote memory access.
+  */
++static uintptr_t
++search_linux_map_for_section(void *handle, const char *section, const char *binary_name)
++{
++    PyErr_SetString(PyExc_NotImplementedError,
++                   "search_linux_map_for_section not implemented for this platform");
++    return 0;
++}
++
++#endif  /* __ANDROID__ || (!HAVE_PROCESS_VM_READV && __linux__) */
++
++/* Example usage in existing code:
++ *
++ * uintptr_t runtime_addr = search_linux_map_for_section(handle, "PyRuntime", "python");
++ * if (runtime_addr == 0) {
++ *     // Handle error - PyErr is already set
++ *     return NULL;
++ * }
++ * // Use runtime_addr to access the PyRuntime structure
++ */
