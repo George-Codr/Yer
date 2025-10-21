@@ -86,7 +86,7 @@ jobs:
         if: startsWith(matrix.version, '3.14') || startsWith(matrix.version, '3.15')
         run: |
           echo -e '\n*disabled*\n_remote_debugging_module _remote_debugging_module.c' >> cpython-${{ matrix.version }}/Modules/Setup
-  	  
+
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
