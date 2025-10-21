@@ -98,7 +98,8 @@ jobs:
           RANLIB: ${{ env.RANLIB }}
         run: |
           set -euxo pipefail
-          #./android.py clean
+          VERSION=${{ matrix.version }}
+          ./android.py clean
           rm -rf cpython-${VERSION}/cross-build;rm -rf cpython-${VERSION}/Android/build;rm -rf cpython-${VERSION}/Makefile;rm -rf cpython-${VERSION}/config.status;rm -rf cpython-${VERSION}/Modules/Setup.local;find cpython-${VERSION} -name "*.o" -delete;find cpython-${VERSION} -name "*.a" -delete
           rm -rf android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
