@@ -85,8 +85,8 @@ jobs:
       - name: Disable remote debugging module for Android
         if: startsWith(matrix.python_version, '3.14') || startsWith(matrix.python_version, '3.15')
         run: |
-          echo "*disabled* _remote_debugging_module" > cpython-$PYTHON_VERSION/Modules/Setup.local
-   
+          echo "*disabled* _remote_debugging_module" >> cpython-${{ matrix.version }}/Modules/Setup
+
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
@@ -98,6 +98,8 @@ jobs:
           RANLIB: ${{ env.RANLIB }}
         run: |
           set -euxo pipefail
+          ./android.py clean
+          rm -rf cpython-${VERSION}/cross-build;rm -rf cpython-${VERSION}/Android/build;rm -rf cpython-${VERSION}/Makefile;rm -rf cpython-${VERSION}/config.status;rm -rf cpython-${VERSION}/Modules/Setup.local;find cpython-${VERSION} -name "*.o" -delete;find cpython-${VERSION} -name "*.a" -delete
           rm -rf android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           ./android.py ci --fast-ci aarch64-linux-android
