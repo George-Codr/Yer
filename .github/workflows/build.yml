@@ -132,7 +132,7 @@ jobs:
           chmod 755 "$DEB_DIR/DEBIAN/postinst"
           dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
       - name: Upload Debian package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: pyv${{ matrix.version }}_aarch64
           path: pyv*_${{ matrix.version }}_aarch64.deb
