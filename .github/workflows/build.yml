@@ -133,7 +133,8 @@ jobs:
           cd Android
           ./android.py ci --fast-ci aarch64-linux-android
           echo "✅ Build finished for version ${{ matrix.version }}"
-          ls -lh ../cross-build/aarch64-linux-android/prefix || echo "⚠️ Build output not found"
+          ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
+          ../cross-build/aarch64-linux-android/prefix/bin/python3 -c "print(__import__('sys').version)"
 
       - name: Package as .deb
         run: |
