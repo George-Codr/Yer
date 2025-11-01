@@ -12,7 +12,7 @@ jobs:
     if: ${{ github.repository_owner == 'George-Codr' && github.event.repository.name == 'Yer' }}
     name: Build Android Python (${{ matrix.version }}) NDK ${{ matrix.ndk_major }}
     runs-on: macos-14
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +45,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install macOS dependencies for Python build
+        run: |
+          brew install \
+            gdbm \
+            ncurses \
+            readline \
+            libffi \
+            tcl-tk \
+            ossp-uuid \
+            xz \
+            wget \
+            dpkg
+          brew uninstall gcc || true
+          echo "✅ macOS build dependencies installed."
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
 
@@ -83,8 +97,16 @@ jobs:
           echo "✅ Using Clang from SDK/NDK"
           $CC --version
           $AR --version
-      - name: Install dpkg
-        run: brew install dpkg wget && brew uninstall gcc
+          export PATH="/usr/local/opt/tcl-tk/bin:$PATH"
+          export CPPFLAGS="-I/usr/local/opt/gdbm/include -I/usr/local/opt/ncurses/include -I/usr/local/opt/readline/include -I/usr/local/opt/libffi/include -I/usr/local/opt/tcl-tk/include $CPPFLAGS"
+          export LDFLAGS="-L/usr/local/opt/gdbm/lib -L/usr/local/opt/ncurses/lib -L/usr/local/opt/readline/lib -L/usr/local/opt/libffi/lib -L/usr/local/opt/tcl-tk/lib $LDFLAGS"
+          export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
+          if [ "$(uname)" = "Darwin" ]; then
+            export CPU_COUNT="$(sysctl -n hw.ncpu)"
+          else
+            export CPU_COUNT="$(nproc)"
+          fi
+          echo "✅ Host environment configured."
 
       - name: Download official Python source tarball (from Secret)
         run: |
