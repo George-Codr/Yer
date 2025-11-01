@@ -133,7 +133,7 @@ jobs:
           cd Android
           ./android.py ci --fast-ci aarch64-linux-android
           echo "✅ Build finished for version ${{ matrix.version }}"
-          ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
+          ls -lh ../cross-build/aarch64-linux-android/prefix || echo "⚠️ Build output not found"
 
       - name: Package as .deb
         run: |
