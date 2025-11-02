@@ -52,29 +52,29 @@ jobs:
         export STRIP=$TOOLCHAIN/bin/llvm-strip
         export CFLAGS="--sysroot=$SYSROOT -I$PREFIX/include"
         export LDFLAGS="--sysroot=$SYSROOT -L$PREFIX/lib"
-
         build_library() {
           NAME=$1
           URL=$2
           CONFIGURE_FLAGS=$3
           echo "=== Building $NAME ==="
-          wget -c $URL -O $NAME.tar.gz
-          tar xf $NAME.tar.gz
-          cd $NAME*
-          ./configure --host=$TARGET --prefix=$PREFIX $CONFIGURE_FLAGS
+          wget -c "$URL" -O ${NAME}.tar.gz
+          tar xf ${NAME}.tar.gz
+          DIR=$(find . -maxdepth 1 -type d -name "${NAME}*" | head -n 1)
+          cd "$DIR"
+          ./configure --host=$TARGET --prefix=$PREFIX $CONFIGURE_FLAGS || (echo "Configure failed for $NAME" && exit 1)
           make -j$(nproc)
           make install
           cd ..
         }
 
-        # Build each library
-        build_library "libffi" "https://github.com/libffi/libffi/archive/refs/tags/v3.5.2.tar.gz" ""
+        build_library "libffi" "https://github.com/libffi/libffi/archive/refs/tags/v3.4.4.tar.gz" ""
         build_library "gdbm" "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" ""
         build_library "ncurses" "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" "--with-shared --without-debug --without-ada"
         build_library "readline" "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" ""
-        build_library "tcl" "https://prdownloads.sourceforge.net/projects/tcl/files/Tcl/8.6.17/tcl8.6.17-src.tar.gz" ""
-        build_library "tk" "https://prdownloads.sourceforge.net/projects/tcl/files/Tcl/8.6.17/tk8.6.17-src.tar.gz" "--with-tcl=$PREFIX/lib"
+        build_library "tcl" "https://downloads.sourceforge.net/tcl/tcl8.6.14-src.tar.gz" ""
+        build_library "tk" "https://downloads.sourceforge.net/tcl/tk8.6.14-src.tar.gz" "--with-tcl=$PREFIX/lib"
         build_library "ossp-uuid" "ftp://ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" ""
+   
 
     # 6️⃣ Zip the built libraries
     - name: Archive libraries
