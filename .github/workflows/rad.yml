@@ -2,7 +2,7 @@ name: Build and Release Android aarch64 Libraries
 
 on:
   push:
-    branches: [main, '3.*']   # Trigger only on version tags like v1.0, v2.3, etc.
+    branches: [vrt, '3.*']   # Trigger only on version tags like v1.0, v2.3, etc.
 
 jobs:
   build-and-release:
