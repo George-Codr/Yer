@@ -98,6 +98,8 @@ jobs:
           $CC --version
           $AR --version
           export PATH="/usr/local/opt/tcl-tk/bin:$PATH"
+          export CPPFLAGS="${CPPFLAGS:-}"
+          export LDFLAGS="${LDFLAGS:-}"
           export CPPFLAGS="-I/usr/local/opt/gdbm/include -I/usr/local/opt/ncurses/include -I/usr/local/opt/readline/include -I/usr/local/opt/libffi/include -I/usr/local/opt/tcl-tk/include $CPPFLAGS"
           export LDFLAGS="-L/usr/local/opt/gdbm/lib -L/usr/local/opt/ncurses/lib -L/usr/local/opt/readline/lib -L/usr/local/opt/libffi/lib -L/usr/local/opt/tcl-tk/lib $LDFLAGS"
           export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
