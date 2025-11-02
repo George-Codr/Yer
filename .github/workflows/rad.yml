@@ -27,10 +27,10 @@ jobs:
       run: |
         mkdir -p ${{ github.workspace }}/android-ndk
         cd ${{ github.workspace }}/android-ndk
-        wget https://dl.google.com/android/repository/android-ndk-r${{ env.ANDROID_NDK_VERSION }}-linux.zip
-        unzip android-ndk-r${{ env.ANDROID_NDK_VERSION }}-linux.zip
-        mv android-ndk-r${{ env.ANDROID_NDK_VERSION }}/* .
-        rm -rf android-ndk-r${{ env.ANDROID_NDK_VERSION }}*
+        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
+        unzip android-ndk-r27d-linux.zip
+        mv android-ndk-r27d/* .
+        rm -rf android-ndk-r27d*
 
     # 4️⃣ Set environment
     - name: Setup environment
@@ -68,13 +68,13 @@ jobs:
         }
 
         # Build each library
-        build_library "libffi" "ftp://sourceware.org/pub/libffi/libffi-3.4.4.tar.gz" ""
-        build_library "gdbm" "https://ftp.gnu.org/gnu/gdbm/gdbm-1.24.tar.gz" ""
-        build_library "ncurses" "https://ftp.gnu.org/gnu/ncurses/ncurses-6.4.tar.gz" "--with-shared --without-debug --without-ada"
-        build_library "readline" "https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz" ""
-        build_library "tcl" "https://prdownloads.sourceforge.net/tcl/tcl8.6.13-src.tar.gz" ""
-        build_library "tk" "https://prdownloads.sourceforge.net/tcl/tk8.6.13-src.tar.gz" "--with-tcl=$PREFIX/lib"
-        build_library "ossp-uuid" "https://jaist.dl.osdn.jp/ossp-uuid/uuid-1.6.2.tar.gz" ""
+        build_library "libffi" "https://github.com/libffi/libffi/archive/refs/tags/v3.5.2.tar.gz" ""
+        build_library "gdbm" "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" ""
+        build_library "ncurses" "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" "--with-shared --without-debug --without-ada"
+        build_library "readline" "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" ""
+        build_library "tcl" "https://prdownloads.sourceforge.net/projects/tcl/files/Tcl/8.6.17/tcl8.6.17-src.tar.gz" ""
+        build_library "tk" "https://prdownloads.sourceforge.net/projects/tcl/files/Tcl/8.6.17/tk8.6.17-src.tar.gz" "--with-tcl=$PREFIX/lib"
+        build_library "ossp-uuid" "ftp://ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" ""
 
     # 6️⃣ Zip the built libraries
     - name: Archive libraries
