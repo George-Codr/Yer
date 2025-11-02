@@ -9,7 +9,7 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     env:
-      ANDROID_NDK_VERSION: 27.3.13750724
+      ANDROID_NDK_VERSION: r27d
       API: 24
       TARGET: aarch64-linux-android
       PREFIX: ${{ github.workspace }}/android-libs
@@ -19,34 +19,34 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2️⃣ Install prerequisites
+    # 2️⃣ Install dependencies
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y wget build-essential automake autoconf libtool pkg-config unzip zip
+        sudo apt install -y wget build-essential automake autoconf libtool pkg-config unzip zip curl
 
-    # 3️⃣ Download Android NDK
+    # 3️⃣ Download and extract Android NDK
     - name: Download Android NDK
       run: |
         mkdir -p ${{ github.workspace }}/android-ndk
         cd ${{ github.workspace }}/android-ndk
-        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
-        unzip -q android-ndk-r27d-linux.zip
-        mv android-ndk-r27d/* .
-        rm -rf android-ndk-r27d*
+        wget -q https://dl.google.com/android/repository/android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+        unzip -q android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+        mv android-ndk-${{ env.ANDROID_NDK_VERSION }}/* .
+        rm -rf android-ndk-${{ env.ANDROID_NDK_VERSION }}*
 
     # 4️⃣ Setup environment
     - name: Setup environment
       run: |
         echo "ANDROID_NDK_HOME=${{ github.workspace }}/android-ndk" >> $GITHUB_ENV
         echo "TOOLCHAIN=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-        echo "PATH=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
         echo "SYSROOT=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
     # 5️⃣ Build libraries
     - name: Build libraries
       run: |
-        set -e
+        set -eux
         mkdir -p $PREFIX
         export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
         export CXX=$TOOLCHAIN/bin/${TARGET}${API}-clang++
@@ -61,10 +61,11 @@ jobs:
           URL=$2
           CONFIGURE_FLAGS=$3
           echo "=== Building $NAME ==="
-          wget -c "$URL" -O ${NAME}.tar.gz
+          wget -q "$URL" -O ${NAME}.tar.gz
           tar xf ${NAME}.tar.gz
           DIR=$(find . -maxdepth 1 -type d -name "${NAME}*" | head -n 1)
           cd "$DIR"
+          autoreconf -fi || true
           ./configure --host=$TARGET --prefix=$PREFIX $CONFIGURE_FLAGS || (echo "Configure failed for $NAME" && exit 1)
           make -j$(nproc)
           make install
@@ -79,11 +80,11 @@ jobs:
         build_library "tk" "https://downloads.sourceforge.net/tcl/tk8.6.14-src.tar.gz" "--with-tcl=$PREFIX/lib"
         build_library "ossp-uuid" "ftp://ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" ""
 
-    # 6️⃣ Zip the built libraries
+    # 6️⃣ Archive built libraries
     - name: Archive libraries
       run: |
         cd $PREFIX
-        zip -r android-libs-${GITHUB_REF_NAME}.zip *
+        zip -r android-libs-${GITHUB_REF_NAME}.zip .
 
     # 7️⃣ Create GitHub release and upload
     - name: Create and upload release
