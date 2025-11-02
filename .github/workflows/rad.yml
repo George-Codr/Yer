@@ -2,7 +2,8 @@ name: Build and Release Android aarch64 Libraries
 
 on:
   push:
-    branches: [vrt, '3.*']   # Trigger only on version tags like v1.0, v2.3, etc.
+    branches: [vrt, "3.*"]
+  workflow_dispatch:
 
 jobs:
   build-and-release:
@@ -16,23 +17,25 @@ jobs:
     steps:
     # 1️⃣ Checkout repository
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     # 2️⃣ Install prerequisites
     - name: Install dependencies
-      run: sudo apt update && sudo apt install -y wget build-essential automake autoconf libtool pkg-config unzip
+      run: |
+        sudo apt update
+        sudo apt install -y wget build-essential automake autoconf libtool pkg-config unzip zip
 
-    # 3️⃣ Download NDK
+    # 3️⃣ Download Android NDK
     - name: Download Android NDK
       run: |
         mkdir -p ${{ github.workspace }}/android-ndk
         cd ${{ github.workspace }}/android-ndk
         wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
-        unzip android-ndk-r27d-linux.zip
+        unzip -q android-ndk-r27d-linux.zip
         mv android-ndk-r27d/* .
         rm -rf android-ndk-r27d*
 
-    # 4️⃣ Set environment
+    # 4️⃣ Setup environment
     - name: Setup environment
       run: |
         echo "ANDROID_NDK_HOME=${{ github.workspace }}/android-ndk" >> $GITHUB_ENV
@@ -52,6 +55,7 @@ jobs:
         export STRIP=$TOOLCHAIN/bin/llvm-strip
         export CFLAGS="--sysroot=$SYSROOT -I$PREFIX/include"
         export LDFLAGS="--sysroot=$SYSROOT -L$PREFIX/lib"
+
         build_library() {
           NAME=$1
           URL=$2
@@ -74,7 +78,6 @@ jobs:
         build_library "tcl" "https://downloads.sourceforge.net/tcl/tcl8.6.14-src.tar.gz" ""
         build_library "tk" "https://downloads.sourceforge.net/tcl/tk8.6.14-src.tar.gz" "--with-tcl=$PREFIX/lib"
         build_library "ossp-uuid" "ftp://ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" ""
-   
 
     # 6️⃣ Zip the built libraries
     - name: Archive libraries
@@ -82,19 +85,12 @@ jobs:
         cd $PREFIX
         zip -r android-libs-${GITHUB_REF_NAME}.zip *
 
-    # 7️⃣ Create a GitHub release and upload artifact
-    - name: Create Release
+    # 7️⃣ Create GitHub release and upload
+    - name: Create and upload release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: vbb
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload Release Asset
-      uses: softprops/action-gh-release@v1
-      with:
+        files: ${{ env.PREFIX }}/android-libs-${{ github.ref_name }}.zip
         tag_name: ${{ github.ref_name }}
-        name: android-libs-${{ github.ref_name }}.zip
-        asset_path: $PREFIX/android-libs-${GITHUB_REF_NAME}.zip
+        name: Android aarch64 Libraries ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
