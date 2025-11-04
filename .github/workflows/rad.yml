@@ -109,7 +109,9 @@ jobs:
               $cfg_extra
 
             make -j$(nproc)
-            make install-strip
+            make install
+            find "$module_dir/lib" -type f \( -name "*.a" -o -name "*.so*" \) -exec /home/runner/work/Yer/Yer/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \; || true
+            #make install-strip
             ls "$module_dir"
 
             cd ..
