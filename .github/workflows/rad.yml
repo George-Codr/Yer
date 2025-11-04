@@ -79,6 +79,7 @@ jobs:
             local name="$1"
             local url="$2"
             local cfg_extra="$3"
+            local hg="$4"
             local need_autoreconf="${4:-false}"
             local post_cfg="${5:-}"
 
@@ -109,9 +110,10 @@ jobs:
 
             make -j$(nproc)
             make install-strip
+            ls module_dir
 
             cd ..
-            zip -r9 "${name}-${{ github.ref_name }}.zip" "$name"
+            zip -r9 "${name}-${{ github.ref_name }}.zip" "$hg"
             echo "${name}_zip=$(pwd)/${name}-${{ github.ref_name }}.zip" >> $GITHUB_OUTPUT
 
             rm -rf "$srcdir" "$name.tar.gz"
@@ -120,21 +122,26 @@ jobs:
           # === Build modules ===
           build_and_zip gdbm \
             "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" \
-            ""
+            "" \
+            "gdbm-1.26"
 
           build_and_zip ncurses \
             "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" \
             "--with-shared --without-debug --without-ada \
              --without-manpages --without-progs --without-tests \
-             --enable-widec --enable-pc-files"
+             --enable-widec --enable-pc-files" \
+             "ncurses-6.5"
+             
 
           build_and_zip readline \
             "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
-            "--with-curses"
+            "--with-curses" \
+            "readline-8.3"
 
           build_and_zip uuid \
             "http://www.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" \
-            "--disable-shared" true
+            "--disable-shared" true \
+            "uuid-1.6.2"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
