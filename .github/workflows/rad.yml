@@ -15,15 +15,9 @@ jobs:
       PREFIX: ${{ github.workspace }}/android-libs
 
     steps:
-      # -------------------------------------------------
-      # 1. Checkout repository
-      # -------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -------------------------------------------------
-      # 2. Cache Android NDK
-      # -------------------------------------------------
       - name: Cache Android NDK
         uses: actions/cache@v3
         id: cache-ndk
@@ -32,9 +26,6 @@ jobs:
           key: ndk-${{ env.ANDROID_NDK_VERSION }}-linux
           restore-keys: ndk-${{ env.ANDROID_NDK_VERSION }}-
 
-      # -------------------------------------------------
-      # 3. Download NDK (if not cached)
-      # -------------------------------------------------
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
@@ -45,9 +36,6 @@ jobs:
           mv android-ndk-${{ env.ANDROID_NDK_VERSION }}/* .
           rm -rf android-ndk-${{ env.ANDROID_NDK_VERSION }}*
 
-      # -------------------------------------------------
-      # 4. Setup environment – generic clang + explicit flags
-      # -------------------------------------------------
       - name: Setup environment
         run: |
           TOOLCHAIN="${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64"
@@ -69,9 +57,6 @@ jobs:
           echo "RANLIB=$TOOLCHAIN/bin/llvm-ranlib" >> $GITHUB_ENV
           echo "STRIP=$TOOLCHAIN/bin/llvm-strip" >> $GITHUB_ENV
 
-      # -------------------------------------------------
-      # 5. Install host build tools
-      # -------------------------------------------------
       - name: Install host dependencies
         run: |
           sudo apt-get update -y
@@ -80,19 +65,16 @@ jobs:
             autoconf automake libtool pkg-config \
             unzip zip curl patch
 
-      # -------------------------------------------------
-      # 6. Build & ZIP each module individually
-      # -------------------------------------------------
       - name: Build and package modules
         id: build
         run: |
           set -eux
           mkdir -p "$PREFIX"
-          export CFLAGS="-I$PREFIX/include"
-          export LDFLAGS="-L$PREFIX/lib"
-          export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 
-          # === FIXED: Robust build + zip function ===
+          # === CRITICAL: Pass full flags to configure ===
+          COMMON_CFLAGS="$COMMON_FLAGS -O2 -fPIC"
+          COMMON_LDFLAGS="$COMMON_FLAGS -L$SYSROOT/usr/lib/$TARGET_TRIPLE/$API"
+
           build_and_zip() {
             local name="$1"
             local url="$2"
@@ -103,29 +85,23 @@ jobs:
             local module_dir="$PREFIX/$name"
             mkdir -p "$module_dir"
 
-            echo "=== Building $name from $url ==="
+            echo "=== Building $name ==="
             wget -q "$url" -O "$name.tar.gz"
             tar xf "$name.tar.gz"
 
-            # FIXED: Find correct source dir (e.g. gdbm-1.26, not android-ndk)
             local srcdir
             srcdir=$(find . -maxdepth 1 -type d -name "${name}*" ! -name "." | head -n1)
-            if [ -z "$srcdir" ]; then
-              echo "ERROR: Source directory not found for $name"
-              exit 1
-            fi
-            echo "Using source directory: $srcdir"
+            [ -z "$srcdir" ] && { echo "ERROR: No source dir for $name"; exit 1; }
+            echo "Source: $srcdir"
             cd "$srcdir"
 
-            # Optional: autoreconf
-            if $need_autoreconf; then
-              autoreconf -fi || echo "autoreconf failed (ignored)"
-            fi
+            $need_autoreconf && autoreconf -fi
 
-            # Optional: post-config patches
             eval "$post_cfg" || true
 
-            # Configure for Android
+            # === PASS CFLAGS and LDFLAGS explicitly ===
+            CFLAGS="$COMMON_CFLAGS -I$module_dir/include" \
+            LDFLAGS="$COMMON_LDFLAGS -L$module_dir/lib" \
             ./configure \
               --host="$TARGET_TRIPLE" \
               --prefix="$module_dir" \
@@ -134,18 +110,14 @@ jobs:
             make -j$(nproc)
             make install-strip
 
-            # Return to parent and zip
             cd ..
             zip -r9 "${name}-${{ github.ref_name }}.zip" "$name"
-
-            # Save path for release
             echo "${name}_zip=$(pwd)/${name}-${{ github.ref_name }}.zip" >> $GITHUB_OUTPUT
 
-            # Cleanup
             rm -rf "$srcdir" "$name.tar.gz"
           }
 
-          # === Build each module ===
+          # === Build modules ===
           build_and_zip gdbm \
             "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" \
             ""
@@ -154,7 +126,7 @@ jobs:
             "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" \
             "--with-shared --without-debug --without-ada \
              --without-manpages --without-progs --without-tests \
-             --enable-widec"
+             --enable-widec --enable-pc-files"
 
           build_and_zip readline \
             "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
@@ -164,9 +136,6 @@ jobs:
             "http://www.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" \
             "--disable-shared" true
 
-      # -------------------------------------------------
-      # 7. Create GitHub Release with all ZIPs
-      # -------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
