@@ -87,7 +87,11 @@ jobs:
             mkdir -p "$module_dir"
 
             echo "=== Building $name ==="
-            wget -q "$url" -O "$name.tar.gz"
+            for i in {1..5}; do
+              wget -q "$url" -O "$name.tar.gz"
+              echo "Download failed, retrying in 5s..."
+              sleep 5
+            done
             tar xf "$name.tar.gz"
 
             local srcdir
