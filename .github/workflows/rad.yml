@@ -85,6 +85,9 @@ jobs:
 
             local module_dir="$PREFIX/$name"
             mkdir -p "$module_dir"
+            mkdir -p "$module_dir/lib"
+            mkdir -p "$module_dir/lib/pkgconfig"
+
 
             echo "=== Building $name ==="
             for i in {1..5}; do
@@ -110,6 +113,7 @@ jobs:
             ./configure \
               --host="$TARGET_TRIPLE" \
               --prefix="$module_dir" \
+              --with-pkg-config-libdir="$module_dir/lib/pkgconfig" \
               $cfg_extra
 
             make -j$(nproc)
