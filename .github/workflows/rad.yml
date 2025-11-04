@@ -48,7 +48,7 @@ jobs:
           TARGET_TRIPLE="${{ env.TARGET }}${{ env.API }}"
           echo "TARGET_TRIPLE=$TARGET_TRIPLE" >> $GITHUB_ENV
 
-          COMMON_FLAGS="-target $TARGET_TRIPLE --sysroot=$SYSROOT -gcc-toolchain=$TOOLCHAIN"
+          COMMON_FLAGS=" "
           echo "COMMON_FLAGS=$COMMON_FLAGS" >> $GITHUB_ENV
 
           echo "CC=$TOOLCHAIN/bin/aarch64-linux-android24-clang $COMMON_FLAGS" >> $GITHUB_ENV
