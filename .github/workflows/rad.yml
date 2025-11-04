@@ -100,8 +100,8 @@ jobs:
             eval "$post_cfg" || true
 
             # === PASS CFLAGS and LDFLAGS explicitly ===
-            CFLAGS="$COMMON_CFLAGS -I$module_dir/include" \
-            LDFLAGS="$COMMON_LDFLAGS -L$module_dir/lib" \
+            CFLAGS=" -I$module_dir/include" \
+            LDFLAGS=" -L$module_dir/lib" \
             ./configure \
               --host="$TARGET_TRIPLE" \
               --prefix="$module_dir" \
