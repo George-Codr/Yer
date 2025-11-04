@@ -1,4 +1,4 @@
-name: Build and Release Android aarch64 Libraries
+name: Build and Release Android aarch64 Libraries (One ZIP per Module)
 
 on:
   push:
@@ -15,83 +15,149 @@ jobs:
       PREFIX: ${{ github.workspace }}/android-libs
 
     steps:
-    # 1️⃣ Checkout repository
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # -------------------------------------------------
+      # 1. Checkout
+      # -------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # 2️⃣ Install dependencies
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y wget build-essential automake autoconf libtool pkg-config unzip zip curl
+      # -------------------------------------------------
+      # 2. Cache NDK
+      # -------------------------------------------------
+      - name: Cache Android NDK
+        uses: actions/cache@v3
+        id: cache-ndk
+        with:
+          path: ${{ github.workspace }}/android-ndk
+          key: ndk-${{ env.ANDROID_NDK_VERSION }}-linux
+          restore-keys: ndk-${{ env.ANDROID_NDK_VERSION }}-
 
-    # 3️⃣ Download and extract Android NDK
-    - name: Download Android NDK
-      run: |
-        mkdir -p ${{ github.workspace }}/android-ndk
-        cd ${{ github.workspace }}/android-ndk
-        wget -q https://dl.google.com/android/repository/android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
-        unzip -q android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
-        mv android-ndk-${{ env.ANDROID_NDK_VERSION }}/* .
-        rm -rf android-ndk-${{ env.ANDROID_NDK_VERSION }}*
+      # -------------------------------------------------
+      # 3. Download NDK
+      # -------------------------------------------------
+      - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ${{ github.workspace }}/android-ndk
+          cd ${{ github.workspace }}/android-ndk
+          wget -q https://dl.google.com/android/repository/android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+          unzip -q android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+          mv android-ndk-${{ env.ANDROID_NDK_VERSION }}/* .
+          rm -rf android-ndk-${{ env.ANDROID_NDK_VERSION }}*
 
-    # 4️⃣ Setup environment
-    - name: Setup environment
-      run: |
-        echo "ANDROID_NDK_HOME=${{ github.workspace }}/android-ndk" >> $GITHUB_ENV
-        echo "TOOLCHAIN=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-        echo "SYSROOT=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot" >> $GITHUB_ENV
-        echo "${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      # -------------------------------------------------
+      # 4. Setup environment – generic clang
+      # -------------------------------------------------
+      - name: Setup environment
+        run: |
+          echo "TOOLCHAIN=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "SYSROOT=${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-    # 5️⃣ Build libraries
-    - name: Build libraries
-      run: |
-        set -eux
-        mkdir -p $PREFIX
-        export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
-        export CXX=$TOOLCHAIN/bin/${TARGET}${API}-clang++
-        export AR=$TOOLCHAIN/bin/llvm-ar
-        export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-        export STRIP=$TOOLCHAIN/bin/llvm-strip
-        export CFLAGS="--sysroot=$SYSROOT -I$PREFIX/include"
-        export LDFLAGS="--sysroot=$SYSROOT -L$PREFIX/lib"
+          TARGET_TRIPLE="${{ env.TARGET }}${{ env.API }}"
+          echo "TARGET_TRIPLE=$TARGET_TRIPLE" >> $GITHUB_ENV
 
-        build_library() {
-          NAME=$1
-          URL=$2
-          CONFIGURE_FLAGS=$3
-          echo "=== Building $NAME ==="
-          wget -q "$URL" -O ${NAME}.tar.gz
-          tar xf ${NAME}.tar.gz
-          DIR=$(find . -maxdepth 1 -type d -name "${NAME}*" | head -n 1)
-          cd "$DIR"
-          autoreconf -fi || true
-          ./configure --host=$TARGET --prefix=$PREFIX $CONFIGURE_FLAGS || (echo "Configure failed for $NAME" && exit 1)
-          make -j$(nproc)
-          make install
-          cd ..
-        }
+          COMMON_FLAGS="-target $TARGET_TRIPLE --sysroot=$SYSROOT -gcc-toolchain=$TOOLCHAIN"
+          echo "COMMON_FLAGS=$COMMON_FLAGS" >> $GITHUB_ENV
 
-        build_library "libffi" "https://github.com/libffi/libffi/archive/refs/tags/v3.4.4.tar.gz" ""
-        build_library "gdbm" "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" ""
-        build_library "ncurses" "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" "--with-shared --without-debug --without-ada"
-        build_library "readline" "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" ""
-        build_library "tcl" "https://downloads.sourceforge.net/tcl/tcl8.6.14-src.tar.gz" ""
-        build_library "tk" "https://downloads.sourceforge.net/tcl/tk8.6.14-src.tar.gz" "--with-tcl=$PREFIX/lib"
-        build_library "ossp-uuid" "ftp://ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" ""
+          echo "CC=${{ env.TOOLCHAIN }}/bin/clang $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "CXX=${{ env.TOOLCHAIN }}/bin/clang++ $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "AR=${{ env.TOOLCHAIN }}/bin/llvm-ar" >> $GITHUB_ENV
+          echo "RANLIB=${{ env.TOOLCHAIN }}/bin/llvm-ranlib" >> $GITHUB_ENV
+          echo "STRIP=${{ env.TOOLCHAIN }}/bin/llvm-strip" >> $GITHUB_ENV
 
-    # 6️⃣ Archive built libraries
-    - name: Archive libraries
-      run: |
-        cd $PREFIX
-        zip -r android-libs-${GITHUB_REF_NAME}.zip .
+      # -------------------------------------------------
+      # 5. Install host tools
+      # -------------------------------------------------
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            wget tar gzip bzip2 build-essential \
+            autoconf automake libtool pkg-config \
+            unzip zip curl patch
 
-    # 7️⃣ Create GitHub release and upload
-    - name: Create and upload release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ${{ env.PREFIX }}/android-libs-${{ github.ref_name }}.zip
-        tag_name: ${{ github.ref_name }}
-        name: Android aarch64 Libraries ${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # -------------------------------------------------
+      # 6. Build & Zip each module separately
+      # -------------------------------------------------
+      - name: Build and package modules
+        run: |
+          set -eux
+          mkdir -p "$PREFIX"
+          export CFLAGS="-I$PREFIX/include"
+          export LDFLAGS="-L$PREFIX/lib"
+          export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+
+          # Helper: build + zip + save path
+          build_and_zip() {
+            local name="$1"
+            local url="$2"
+            local cfg_extra="$3"
+            local need_autoreconf="${4:-false}"
+            local post_cfg="${5:-}"
+
+            local module_dir="$PREFIX/$name"
+            mkdir -p "$module_dir"
+
+            echo "=== Building $name ==="
+            wget -q "$url" -O "$name.tar.gz"
+            tar xf "$name.tar.gz"
+            local srcdir=$(find . -maxdepth 1 -type d ! -name '.' | head -n1)
+            cd "$srcdir"
+
+            $need_autoreconf && autoreconf -fi
+            eval $post_cfg
+
+            ./configure \
+              --host=$TARGET_TRIPLE \
+              --prefix="$module_dir" \
+              $cfg_extra
+
+            make -j$(nproc)
+            make install-strip
+            cd ..
+
+            # Zip the module
+            zip -r9 "${name}-${{ github.ref_name }}.zip" "$name"
+            echo "ZIP_PATH=$(pwd)/${name}-${{ github.ref_name }}.zip" >> $GITHUB_OUTPUT
+
+            # Clean up source
+            rm -rf "$srcdir" "$name.tar.gz"
+          }
+
+          # === Build each module ===
+          build_and_zip gdbm \
+            https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz \
+            ""
+
+          build_and_zip ncurses \
+            https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz \
+            "--with-shared --without-debug --without-ada \
+             --without-manpages --without-progs --without-tests \
+             --enable-widec"
+
+          build_and_zip readline \
+            https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz \
+            "--with-curses"
+
+          build_and_zip uuid \
+            http://www.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz \
+            "--disable-shared" true
+
+      # -------------------------------------------------
+      # 7. Create GitHub Release with all ZIPs
+      # -------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Android aarch64 Modules ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            gdbm-${{ github.ref_name }}.zip
+            ncurses-${{ github.ref_name }}.zip
+            readline-${{ github.ref_name }}.zip
+            uuid-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
