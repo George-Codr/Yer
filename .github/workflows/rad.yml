@@ -51,8 +51,8 @@ jobs:
           COMMON_FLAGS="-target $TARGET_TRIPLE --sysroot=$SYSROOT -gcc-toolchain=$TOOLCHAIN"
           echo "COMMON_FLAGS=$COMMON_FLAGS" >> $GITHUB_ENV
 
-          echo "CC=$TOOLCHAIN/bin/clang $COMMON_FLAGS" >> $GITHUB_ENV
-          echo "CXX=$TOOLCHAIN/bin/clang++ $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "CC=$TOOLCHAIN/bin/aarch64-linux-android24-clang $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "CXX=$TOOLCHAIN/bin/aarch64-linux-android24-clang++ $COMMON_FLAGS" >> $GITHUB_ENV
           echo "AR=$TOOLCHAIN/bin/llvm-ar" >> $GITHUB_ENV
           echo "RANLIB=$TOOLCHAIN/bin/llvm-ranlib" >> $GITHUB_ENV
           echo "STRIP=$TOOLCHAIN/bin/llvm-strip" >> $GITHUB_ENV
