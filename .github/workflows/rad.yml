@@ -110,7 +110,7 @@ jobs:
 
             make -j$(nproc)
             make install-strip
-            ls module_dir
+            ls "$module_dir"
 
             cd ..
             zip -r9 "${name}-${{ github.ref_name }}.zip" "$hg"
