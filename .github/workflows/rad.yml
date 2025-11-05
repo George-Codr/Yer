@@ -40,19 +40,15 @@ jobs:
         run: |
           TOOLCHAIN="${{ github.workspace }}/android-ndk/toolchains/llvm/prebuilt/linux-x86_64"
           SYSROOT="$TOOLCHAIN/sysroot"
-
           echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
           echo "SYSROOT=$SYSROOT" >> $GITHUB_ENV
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-
           TARGET_TRIPLE="${{ env.TARGET }}${{ env.API }}"
           echo "TARGET_TRIPLE=$TARGET_TRIPLE" >> $GITHUB_ENV
-
           COMMON_FLAGS=" "
           echo "COMMON_FLAGS=$COMMON_FLAGS" >> $GITHUB_ENV
-
-          echo "CC=$TOOLCHAIN/bin/aarch64-linux-android24-clang $COMMON_FLAGS" >> $GITHUB_ENV
-          echo "CXX=$TOOLCHAIN/bin/aarch64-linux-android24-clang++ $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "CC=$TOOLCHAIN/bin/${{ env.TARGET }}${{ env.API }}-clang $COMMON_FLAGS" >> $GITHUB_ENV
+          echo "CXX=$TOOLCHAIN/bin/${{ env.TARGET }}${{ env.API }}-clang++ $COMMON_FLAGS" >> $GITHUB_ENV
           echo "AR=$TOOLCHAIN/bin/llvm-ar" >> $GITHUB_ENV
           echo "RANLIB=$TOOLCHAIN/bin/llvm-ranlib" >> $GITHUB_ENV
           echo "STRIP=$TOOLCHAIN/bin/llvm-strip" >> $GITHUB_ENV
@@ -60,10 +56,7 @@ jobs:
       - name: Install host dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            wget tar gzip bzip2 build-essential \
-            autoconf automake libtool pkg-config \
-            unzip zip curl patch
+          sudo apt-get install -y wget tar gzip bzip2 build-essential autoconf automake libtool pkg-config unzip zip curl patch
 
       - name: Build and package modules
         id: build
@@ -71,97 +64,71 @@ jobs:
           set -eux
           mkdir -p "$PREFIX"
 
-          # === CRITICAL: Pass full flags to configure ===
-          COMMON_CFLAGS="$COMMON_FLAGS -O2 -fPIC"
-          COMMON_LDFLAGS="$COMMON_FLAGS -L$SYSROOT/usr/lib/$TARGET_TRIPLE/$API"
-
           build_and_zip() {
             local name="$1"
             local url="$2"
             local cfg_extra="$3"
             local hg="$4"
-            local need_autoreconf="${4:-false}"
-            local post_cfg="${5:-}"
-
-            local module_dir="$PREFIX/$name"
-            mkdir -p "$module_dir"
-            mkdir -p "$module_dir/lib"
-            mkdir -p "$module_dir/lib/pkgconfig"
-
+            local need_autoreconf="${5:-false}"
+            local post_cfg="${6:-}"
 
             echo "=== Building $name ==="
-            rm -rf "$name.tar.gz"
+            rm -f "$name.tar.gz"
             for i in {1..5}; do
-                if wget "$url" -O "$name.tar.gz"; then
-                    echo "Download succeeded"
-                    break
-                else
-                    echo "Download failed, retrying in 5s..."
-                    sleep 5
-                fi
+              wget "$url" -O "$name.tar.gz" && break
+              sleep 5
             done
 
-            rm -rf $name || true
+            rm -rf "$hg" || true
             tar xf "$name.tar.gz"
-            local srcdir
-            srcdir=$(find . -maxdepth 1 -type d -name "${name}*" ! -name "." | head -n1)
-            [ -z "$srcdir" ] && { echo "ERROR: No source dir for $name"; exit 1; }
-            echo "Source: $srcdir"
-            cd "$srcdir"
+            cd "$(find . -maxdepth 1 -type d -name "$hg*" | head -n1)" || exit 1
 
             $need_autoreconf && autoreconf -fi
-
             eval "$post_cfg" || true
 
-            # === PASS CFLAGS and LDFLAGS explicitly ===
-            export ac_cv_func_gethostname=yes
-            export ac_cv_func_gethostbyname=yes
-            export ac_cv_func_accept=yes
-            export ac_cv_func_va_copy=yes
-            CFLAGS=" -I$module_dir/include" \
-            LDFLAGS=" -L$module_dir/lib" \
+            PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" \
+            CFLAGS="-O2 -fPIC -I$PREFIX/include $COMMON_FLAGS" \
+            CXXFLAGS="-O2 -fPIC -I$PREFIX/include $COMMON_FLAGS" \
+            LDFLAGS="-L$PREFIX/lib $COMMON_FLAGS" \
             ./configure \
               --host="$TARGET_TRIPLE" \
-              --prefix="$module_dir" \
-              --with-pkg-config-libdir="$module_dir/lib/pkgconfig" \
+              --prefix="$PREFIX" \
+              --with-pkg-config-libdir="$PREFIX/lib/pkgconfig" \
               $cfg_extra
 
             make -j$(nproc)
             make install
-            find "$module_dir/lib" -type f \( -name "*.a" -o -name "*.so*" \) -exec /home/runner/work/Yer/Yer/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \; || true
-            #make install-strip
-            ls "$module_dir"
 
-            cd ..
-            zip -r9 "${name}-${{ github.ref_name }}.zip" "$hg"
-            echo "${name}_zip=$(pwd)/${name}-${{ github.ref_name }}.zip" >> $GITHUB_OUTPUT
+            find "$PREFIX/$name/lib" -type f \( -name "*.a" -o -name "*.so*" \) -exec $STRIP -g {} \; || true
 
-            rm -rf "$srcdir" "$name.tar.gz"
+            (cd "$PREFIX" && zip -r9 "../${name}-${{ github.ref_name }}.zip" "$name")
+            echo "${name}_zip=$(pwd)/../${name}-${{ github.ref_name }}.zip" >> $GITHUB_OUTPUT
+
+            cd "$github.workspace"
+            rm -rf "$hg" "$name.tar.gz"
           }
-
-          # === Build modules ===
-          build_and_zip gdbm \
-            "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" \
-            "" \
-            "gdbm-1.26"
 
           build_and_zip ncurses \
             "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz" \
-            "--with-shared --without-debug --without-ada \
-             --without-manpages --without-progs --without-tests \
-             --enable-widec --enable-pc-files" \
-             "ncurses-6.5"
-             
+            "--with-shared --without-debug --without-ada --without-manpages --without-progs --without-tests --enable-widec --enable-pc-files --with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
+            "ncurses-6.5"
 
-          build_and_zip readline \
-            "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
-            "--with-curses" \
-            "readline-8.3"
+          build_and_zip gdbm \
+            "https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz" \
+            "--with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
+            "gdbm-1.26"
 
           build_and_zip uuid \
             "https://www.mirrorservice.org/sites/ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" \
-            "--disable-shared" true \
-            "uuid-1.6.2"
+            "--disable-shared --with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
+            "uuid-1.6.2" \
+            true \
+            "export ac_cv_func_gethostname=yes ac_cv_func_gethostbyname=yes ac_cv_func_accept=yes ac_cv_func_va_copy=yes ac_cv_func___va_copy=yes ac_cv_header_sys_socket_h=yes ac_cv_lib_socket_accept=no ac_cv_prog_uuid_test=no"
+
+          build_and_zip readline \
+            "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
+            "--with-curses --with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
+            "readline-8.3"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -171,9 +138,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            ${{ steps.build.outputs.gdbm_zip }}
             ${{ steps.build.outputs.ncurses_zip }}
-            ${{ steps.build.outputs.readline_zip }}
+            ${{ steps.build.outputs.gdbm_zip }}
             ${{ steps.build.outputs.uuid_zip }}
+            ${{ steps.build.outputs.readline_zip }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
