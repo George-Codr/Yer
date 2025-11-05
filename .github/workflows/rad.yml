@@ -126,7 +126,7 @@ jobs:
             "--disable-shared --with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
             "uuid-1.6.2" \
             true \
-            "export ac_cv_func_gethostname=yes ac_cv_func_gethostbyname=yes ac_cv_func_accept=yes ac_cv_func_va_copy=yes ac_cv_func___va_copy=yes ac_cv_header_sys_socket_h=yes ac_cv_lib_socket_accept=no ac_cv_prog_uuid_test=no"
+            "export ac_cv_func_gethostname=yes ac_cv_func_gethostbyname=yes ac_cv_func_accept=yes ac_cv_func_connect=yes ac_cv_func_bind=yes ac_cv_func_va_copy=yes ac_cv_func___va_copy=yes ac_cv_header_sys_socket_h=yes ac_cv_header_netdb_h=yes ac_cv_header_netinet_in_h=yes ac_cv_lib_socket_accept=no ac_cv_lib_nsl_gethostname=no ac_cv_prog_uuid_test=no"
 
           build_and_zip readline \
             "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
