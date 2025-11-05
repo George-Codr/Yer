@@ -92,7 +92,7 @@ jobs:
             echo "=== Building $name ==="
             rm -rf "$name.tar.gz"
             for i in {1..5}; do
-                if wget -q "$url" -O "$name.tar.gz"; then
+                if wget "$url" -O "$name.tar.gz"; then
                     echo "Download succeeded"
                     break
                 else
@@ -155,7 +155,7 @@ jobs:
             "readline-8.3"
 
           build_and_zip uuid \
-            "http://www.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" \
+            "https://www.mirrorservice.org/sites/ftp.ossp.org/pkg/lib/uuid/uuid-1.6.2.tar.gz" \
             "--disable-shared" true \
             "uuid-1.6.2"
 
