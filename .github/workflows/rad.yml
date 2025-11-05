@@ -99,6 +99,8 @@ jobs:
             make -j$(nproc)
             make install
 
+            mkdir -p "$PREFIX/$name"
+            find "$PREFIX" -maxdepth 1 ! -name "$name" ! -path "$PREFIX" -exec mv {} "$PREFIX/$name/" \; 2>/dev/null || true
             find "$PREFIX/$name/lib" -type f \( -name "*.a" -o -name "*.so*" \) -exec $STRIP -g {} \; || true
 
             (cd "$PREFIX" && zip -r9 "../${name}-${{ github.ref_name }}.zip" "$name")
@@ -123,7 +125,7 @@ jobs:
             "--disable-shared --with-pkg-config-libdir=$PREFIX/lib/pkgconfig" \
             "uuid-1.6.2" \
             true \
-            "export ac_cv_func_gethostname=yes ac_cv_func_gethostbyname=yes ac_cv_func_accept=yes ac_cv_func_va_copy=yes ac_cv_func___va_copy=yes ac_cv_header_sys_socket_h=yes ac_cv_lib_socket_accept=no ac_cv_prog_uuid_test=no"
+            "export ac_cv_func_gethostname=yes ac_cv_func_gethostbyname=yes ac_cv_func_accept=yes ac, ac_cv_func_va_copy=yes ac_cv_func___va_copy=yes ac_cv_header_sys_socket_h=yes ac_cv_lib_socket_accept=no ac_cv_prog_uuid_test=no"
 
           build_and_zip readline \
             "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz" \
