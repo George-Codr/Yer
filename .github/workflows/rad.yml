@@ -107,7 +107,7 @@ jobs:
             zip -r9 "${name}-${{ github.ref_name }}.zip" "$name"
             echo "${name}_zip=$(pwd)/${name}-${{ github.ref_name }}.zip" >> "$GITHUB_OUTPUT"
 
-            cd "$github.workspace"
+            cd "${{ github.workspace }}"
             rm -rf "$hg" "$name.tar.gz"
           }
 
