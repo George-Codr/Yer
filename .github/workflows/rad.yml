@@ -114,6 +114,10 @@ jobs:
             eval "$post_cfg" || true
 
             # === PASS CFLAGS and LDFLAGS explicitly ===
+            export ac_cv_func_gethostname=yes
+            export ac_cv_func_gethostbyname=yes
+            export ac_cv_func_accept=yes
+            export ac_cv_func_va_copy=yes
             CFLAGS=" -I$module_dir/include" \
             LDFLAGS=" -L$module_dir/lib" \
             ./configure \
