@@ -90,13 +90,19 @@ jobs:
 
 
             echo "=== Building $name ==="
+            rm -rf "$name.tar.gz"
             for i in {1..5}; do
-              wget -q "$url" -O "$name.tar.gz"
-              echo "Download failed, retrying in 5s..."
-              sleep 5
+                if wget -q "$url" -O "$name.tar.gz"; then
+                    echo "Download succeeded"
+                    break
+                else
+                    echo "Download failed, retrying in 5s..."
+                    sleep 5
+                fi
             done
-            tar xf "$name.tar.gz"
 
+            rm -rf $name || true
+            tar xf "$name.tar.gz"
             local srcdir
             srcdir=$(find . -maxdepth 1 -type d -name "${name}*" ! -name "." | head -n1)
             [ -z "$srcdir" ] && { echo "ERROR: No source dir for $name"; exit 1; }
