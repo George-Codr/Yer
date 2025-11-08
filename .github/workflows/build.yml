@@ -196,10 +196,34 @@ jobs:
 
           dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
 
-      - name: Upload Debian package
-        uses: actions/upload-artifact@v5
-        with:
-          name: pyv____${{ matrix.version }}_aarch64
-          path: pyv*_${{ matrix.version }}_aarch64.deb
-          if-no-files-found: error
-          overwrite: true
+      - name: Create Release and Upload .deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ matrix.version }}"
+          NDK_MAJOR="${{ matrix.ndk_major }}"
+          ARCH="aarch64"
+          PKG_NAME="python${VERSION//./}-ndk${NDK_MAJOR}"
+          DEB_FILE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
+          TAG="v${VERSION}-android"
+          RELEASE_NAME="Python ${VERSION} for Android (aarch64, NDK r${NDK_MAJOR})"
+
+          # Check if release exists
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Deleting old asset..."
+            gh release delete-asset "$TAG" "$DEB_FILE" --yes || true
+          else
+            echo "Creating new release: $TAG"
+            gh release create "$TAG" \
+              --title "$RELEASE_NAME" \
+              --notes "Cross-compiled Python ${VERSION} for Termux (aarch64) using Android NDK r${NDK_MAJOR} and LLVM ${LLVM_VERSION}." \
+              --draft=false --prerelease=false
+          fi
+
+          # Upload the .deb
+          echo "Uploading $DEB_FILE to release $TAG..."
+          gh release upload "$TAG" "$DEB_FILE" --clobber
+
+          echo "Release asset uploaded: https://github.com/${{ github.repository }}/releases/tag/$TAG"
