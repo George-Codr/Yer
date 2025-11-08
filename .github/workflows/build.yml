@@ -156,8 +156,6 @@ jobs:
             *) echo "Skip" ;;
           esac
           cd Android
-          rm -rf android-env.sh 
-          wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           ./android.py ci --fast-ci aarch64-linux-android
           echo "✅ Build finished for version ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
