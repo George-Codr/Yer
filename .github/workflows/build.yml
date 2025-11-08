@@ -40,7 +40,7 @@ jobs:
       ARCH: aarch64
       ANDROID_NDK_VERSION: ${{ matrix.ndk_version }}
       LLVM_VERSION: 21
-      DEPS_ROOT: /opt/cpython-deps
+      DEPS_ROOT: yrtuo
 
     steps:
       - name: Checkout repository
