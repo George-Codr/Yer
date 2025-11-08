@@ -40,26 +40,69 @@ jobs:
       ARCH: aarch64
       ANDROID_NDK_VERSION: ${{ matrix.ndk_version }}
       LLVM_VERSION: 21
+      DEPS_ROOT: /opt/cpython-deps
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Install macOS dependencies for Python build
+      - name: Install minimal macOS tools
         run: |
-          brew install \
-            gdbm \
-            ncurses \
-            readline \
-            libffi \
-            tcl-tk \
-            ossp-uuid \
-            xz \
-            wget \
-            dpkg \
-            gh
+          brew install wget dpkg gh
           brew uninstall gcc || true
-          echo "✅ macOS build dependencies installed."
+          echo "Minimal macOS tools installed."
+      - name: Download CPython source-deps + Serom pre-builts
+        run: |
+          set -euxo pipefail
+          mkdir -p "$DEPS_ROOT"/{include,lib}
+          declare -A DEPS=(
+            ["tcl-core"]="https://github.com/python/cpython-source-deps/releases/download/tcl-core-8.6.15.0/tcl-core-8.6.15.0.tar.gz"
+            ["tk"]="https://github.com/python/cpython-source-deps/releases/download/tk-8.6.15.0/tk-8.6.15.0.tar.gz"
+            ["libffi"]="https://github.com/python/cpython-source-deps/archive/refs/tags/libffi-3.4.7.zip"
+            ["xz"]="https://github.com/python/cpython-source-deps/archive/refs/tags/xz-5.8.1.1.zip"
+          )
+
+          for name in "${!DEPS[@]}"; do
+            url="${DEPS[$name]}"
+            file="$(basename "$url")"
+            curl -L "$url" -o "$file"
+
+            case "$file" in
+              *.tar.gz) tar -xzf "$file" -C "$DEPS_ROOT" ;;
+              *.zip)    unzip -q "$file" -d "$DEPS_ROOT" ;;
+            esac
+            rm "$file"
+          done
+
+          # Move extracted content to the common include/lib dirs
+          mv "$DEPS_ROOT"/tcl-core-*/include/*   "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/tcl-core-*/lib/*      "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/tk-*/include/*        "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/tk-*/lib/*            "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/libffi-*/include/*    "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/libffi-*/lib/*        "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/xz-*/include/*        "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/xz-*/lib/*            "$DEPS_ROOT/lib/"     2>/dev/null || true
+          declare -A SEROM=(
+            ["readline"]="https://github.com/aikwp/Serom/releases/download/vrt/readline-vrt.zip"
+            ["ncurses"]="https://github.com/aikwp/Serom/releases/download/vrt/ncurses-vrt.zip"
+            ["gdbm"]="https://github.com/aikwp/Serom/releases/download/vrt/gdbm-vrt.zip"
+          )
+
+          for name in "${!SEROM[@]}"; do
+            url="${SEROM[$name]}"
+            file="$(basename "$url")"
+            curl -L "$url" -o "$file"
+            unzip -q "$file" -d "$DEPS_ROOT"
+            rm "$file"
+            # assume zip contains <name>/include and <name>/lib
+            mv "$DEPS_ROOT/$name/include"/* "$DEPS_ROOT/include/" 2>/dev/null || true
+            mv "$DEPS_ROOT/$name/lib"/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
+            rm -rf "$DEPS_ROOT/$name"
+          done
+
+          echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
+          echo "All deps extracted to $DEPS_ROOT"
+          ls -R "$DEPS_ROOT/include" "$DEPS_ROOT/lib" | head -n 20
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
 
@@ -67,9 +110,8 @@ jobs:
         run: |
           set -euxo pipefail
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
-          echo "✅ Android NDK ${ANDROID_NDK_VERSION} installed."
+          echo "Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
-
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
@@ -80,37 +122,26 @@ jobs:
           elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
           else
-            echo "⚠️ NDK toolchain not found; using system clang instead"
-            export TOOLCHAIN="/usr/bin"
+            echo "NDK toolchain not found"
+            exit 1
           fi
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-          if [ -x "$TOOLCHAIN/bin/clang" ]; then
-            export CC="$TOOLCHAIN/bin/clang"
-            export CXX="$TOOLCHAIN/bin/clang++"
-          else
-            export CC=$(command -v clang)
-            export CXX=$(command -v clang++)
-          fi
+
+          export CC="$TOOLCHAIN/bin/clang"
+          export CXX="$TOOLCHAIN/bin/clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export LD="$TOOLCHAIN/bin/ld.lld"
           export NM="$TOOLCHAIN/bin/llvm-nm"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          echo "✅ Using Clang from SDK/NDK"
-          $CC --version
-          $AR --version
-          export PATH="/usr/local/opt/tcl-tk/bin:$PATH"
-          export CPPFLAGS="${CPPFLAGS:-}"
-          export LDFLAGS="${LDFLAGS:-}"
-          export CPPFLAGS="-I/usr/local/opt/gdbm/include -I/usr/local/opt/ncurses/include -I/usr/local/opt/readline/include -I/usr/local/opt/libffi/include -I/usr/local/opt/tcl-tk/include $CPPFLAGS"
-          export LDFLAGS="-L/usr/local/opt/gdbm/lib -L/usr/local/opt/ncurses/lib -L/usr/local/opt/readline/lib -L/usr/local/opt/libffi/lib -L/usr/local/opt/tcl-tk/lib $LDFLAGS"
-          export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
-          if [ "$(uname)" = "Darwin" ]; then
-            export CPU_COUNT="$(sysctl -n hw.ncpu)"
-          else
-            export CPU_COUNT="$(nproc)"
-          fi
-          echo "✅ Host environment configured."
 
+          echo "Using Clang from $TOOLCHAIN"
+          $CC --version
+          export CPPFLAGS="-I$DEPS_ROOT/include $CPPFLAGS"
+          export LDFLAGS="-L$DEPS_ROOT/lib $LDFLAGS"
+          export PKG_CONFIG_PATH="$DEPS_ROOT/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export PATH="$DEPS_ROOT/bin:$PATH"
+          export CPU_COUNT="$(sysctl -n hw.ncpu)"
+          echo "Host environment configured."
       - name: Download official Python source tarball (from Secret)
         run: |
           set -euxo pipefail
@@ -118,25 +149,18 @@ jobs:
           FOLDER="${{ matrix.folder }}"
           VERSION="${{ matrix.version }}"
 
-          # Select correct secret directly by version
           case "$VERSION" in
             3.13.9) URL="${{ secrets.PY313_URL }}" ;;
             3.14.0) URL="${{ secrets.PY314_URL }}" ;;
             3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
-            *) echo "❌ Unknown version $VERSION"; exit 1 ;;
+            *) echo "Unknown version $VERSION"; exit 1 ;;
           esac
 
-          if [ -z "$URL" ]; then
-            echo "❌ Secret for version $VERSION not set."
-            exit 1
-          fi
+          [ -z "$URL" ] && { echo "Secret for $VERSION missing"; exit 1; }
 
-          echo "Downloading Python from $URL"
           curl -L "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
-          
-
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
@@ -153,76 +177,13 @@ jobs:
           case "$VERSION" in
             3.13.9) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch && git apply termux.patch ;;
             3.14.0) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch && git apply termux.patch ;;
-            *) echo "Skip" ;;
+            *) echo "Skip patch" ;;
           esac
           cd Android
+          rm -rf android-env.sh 
+          wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
+          ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
-          echo "✅ Build finished for version ${{ matrix.version }}"
-          ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
-#          ../cross-build/aarch64-linux-android/prefix/bin/python3 -c "print(__import__('sys').version)"
+          echo "Build finished for version ${{ matrix.version }}"
+          ls -lh ../cross-build/aarch64-linux-android || true
 
-      - name: Package as .deb
-        run: |
-          set -euxo pipefail
-          VERSION="${{ matrix.version }}"
-          NDK_MAJOR="${{ matrix.ndk_major }}"
-          PKG_NAME="pyv${VERSION//./}-ndk${NDK_MAJOR}"
-          PKG_VERSION="$VERSION"
-          ARCH="aarch64"
-          BUILD_DIR="./cpython-${VERSION}/cross-build/${ARCH}-linux-android"
-          OUT_DIR=$( [ -d "$BUILD_DIR/prefix" ] && echo "$BUILD_DIR/prefix" || echo "$BUILD_DIR/install" )
-          DEB_DIR="$PKG_NAME"
-
-          mkdir -p "$DEB_DIR/DEBIAN"
-          mkdir -p "$DEB_DIR/usr"
-          cp -r "$OUT_DIR"/* "$DEB_DIR/usr/"
-
-          cat > "$DEB_DIR/DEBIAN/control" <<EOF
-          Package: $PKG_NAME
-          Version: $PKG_VERSION
-          Architecture: $ARCH
-          Maintainer: Cross-compiled by NotFound
-          Description: Python $PKG_VERSION cross-compiled for Termux aarch64 using SDK Clang + LLVM ${LLVM_VERSION} with NDK r${NDK_MAJOR}
-          EOF
-
-          cat > "$DEB_DIR/DEBIAN/postinst" <<EOF
-          #!/bin/sh
-          set -e
-          echo "$PKG_NAME installed successfully!"
-          exit 0
-          EOF
-          chmod 755 "$DEB_DIR/DEBIAN/postinst"
-
-          dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
-
-      - name: Create Release and Upload .deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ matrix.version }}"
-          NDK_MAJOR="${{ matrix.ndk_major }}"
-          ARCH="aarch64"
-          PKG_NAME="python${VERSION//./}-ndk${NDK_MAJOR}"
-          DEB_FILE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
-          TAG="v${VERSION}-android"
-          RELEASE_NAME="Python ${VERSION} for Android (aarch64, NDK r${NDK_MAJOR})"
-
-          # Check if release exists
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists. Deleting old asset..."
-            gh release delete-asset "$TAG" "$DEB_FILE" --yes || true
-          else
-            echo "Creating new release: $TAG"
-            gh release create "$TAG" \
-              --title "$RELEASE_NAME" \
-              --notes "Cross-compiled Python ${VERSION} for Termux (aarch64) using Android NDK r${NDK_MAJOR} and LLVM ${LLVM_VERSION}." \
-              --draft=false --prerelease=false
-          fi
-
-          # Upload the .deb
-          echo "Uploading $DEB_FILE to release $TAG..."
-          gh release upload "$TAG" "$DEB_FILE" --clobber
-
-          echo "Release asset uploaded: https://github.com/${{ github.repository }}/releases/tag/$TAG"
