@@ -47,12 +47,13 @@ jobs:
         uses: actions/checkout@v5
       - name: Install minimal macOS tools
         run: |
-          brew install wget dpkg gh
+          brew install wget dpkg gh bash
           brew uninstall gcc || true
           echo "Minimal macOS tools installed."
       - name: Download prebuilts
         shell: bash
         run: |
+          #!/usr/local/bin/bash
           set -euxo pipefail
           mkdir -p yrtuo/include yrtuo/lib
           export DEPS_ROOT="${{ github.workspace }}/yrtuo"
