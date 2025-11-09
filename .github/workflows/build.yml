@@ -77,15 +77,9 @@ jobs:
           done
 
           # Move extracted files
-          mv "$DEPS_ROOT"/tcl-core-*/include/* "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/tcl-core-*/lib/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/tk-*/include/*       "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/tk-*/lib/*           "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/libffi-*/include/*   "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/libffi-*/lib/*       "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/xz-*/include/*       "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/xz-*/lib/*           "$DEPS_ROOT/lib/"     2>/dev/null || true
-
+          cp -r "$DEPS_ROOT"/**/include/** "$DEPS_ROOT/include/" 2>/dev/null; cp -r "$DEPS_ROOT"/**/lib/** "$DEPS_ROOT/lib/" 2>/dev/null
+          ls "$DEPS_ROOT/**/"
+          
           # Serom prebuilts
           declare -A SEROM
           SEROM[readline]="https://github.com/aikwp/Serom/releases/download/vrt/readline-vrt.zip"
