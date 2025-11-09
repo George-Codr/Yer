@@ -89,7 +89,7 @@ fi
 # When compiling C++, some build systems will combine CFLAGS and CXXFLAGS, and some will
 # use CXXFLAGS alone.
 export CXXFLAGS="$CFLAGS"
-
+export PKG_CONFIG_LIBDIR="$DEPS_ROOT/lib/pkgconfig:$PKG_CONFIG_LIBDIR"
 # Use the same variable name as conda-build
 if [ "$(uname)" = "Darwin" ]; then
     CPU_COUNT="$(sysctl -n hw.ncpu)"
