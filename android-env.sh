@@ -57,29 +57,11 @@ for path in "$AR" "$AS" "$CC" "$CXX" "$LD" "$NM" "$RANLIB" "$READELF" "$STRIP"; 
         fail "$path does not exist"
     fi
 done
+export CFLAGS="-D__BIONIC_NO_PAGE_SIZE_MACRO"
+export LDFLAGS="-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,-z,max-page-size=16384"
 
-export CFLAGS="-D__BIONIC_NO_PAGE_SIZE_MACRO -march=armv7-a -mthumb \
--I/usr/local/opt/gdbm/include \
--I/usr/local/opt/ncurses/include \
--I/usr/local/opt/readline/include \
--I/usr/local/opt/libffi/include \
--I/usr/local/opt/tcl-tk/include \
--I${PREFIX:-}/include \
-${CFLAGS:-}"
-
-export LDFLAGS="-Wl,--build-id=sha1 \
--Wl,--no-rosegment \
--Wl,-z,max-page-size=16384 \
--Wl,--no-undefined \
--lm \
--L/usr/local/opt/gdbm/lib \
--L/usr/local/opt/ncurses/lib \
--L/usr/local/opt/readline/lib \
--L/usr/local/opt/libffi/lib \
--L/usr/local/opt/tcl-tk/lib \
--L${PREFIX:-}/lib \
-${LDFLAGS:-}"
-
+export CPPFLAGS="-I$DEPS_ROOT/include $CPPFLAGS"
+export LDFLAGS="-L$DEPS_ROOT/lib $LDFLAGS"
 # Unlike Linux, Android does not implicitly use a dlopened library to resolve
 # relocations in subsequently-loaded libraries, even if RTLD_GLOBAL is used
 # (https://github.com/android/ndk/issues/1244). So any library that fails to
