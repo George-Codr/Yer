@@ -138,7 +138,6 @@ jobs:
 
           echo "Using Clang from $TOOLCHAIN"
           $CC --version
-          export PKG_CONFIG_PATH="$DEPS_ROOT/lib/pkgconfig:$PKG_CONFIG_PATH"
           export PATH="$DEPS_ROOT/bin:$PATH"
           export CPU_COUNT="$(sysctl -n hw.ncpu)"
           echo "Host environment configured."
