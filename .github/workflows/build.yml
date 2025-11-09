@@ -59,8 +59,8 @@ jobs:
           export DEPS_ROOT="${{ github.workspace }}/yrtuo"
 
           declare -A DEPS
-          DEPS[tcl-core]="https://github.com/python/cpython-source-deps/releases/download/tcl-core-8.6.15.0/tcl-core-8.6.15.0.tar.gz"
-          DEPS[tk]="https://github.com/python/cpython-source-deps/releases/download/tk-8.6.15.0/tk-8.6.15.0.tar.gz"
+          DEPS[tcl-core]="https://github.com/python/cpython-source-deps/archive/refs/tags/tcl-core-8.6.15.0.tar.gz"
+          DEPS[tk]="https://github.com/python/cpython-source-deps/archive/refs/tags/tk-8.6.15.0.tar.gz"
           DEPS[libffi]="https://github.com/python/cpython-source-deps/archive/refs/tags/libffi-3.4.7.zip"
           DEPS[xz]="https://github.com/python/cpython-source-deps/archive/refs/tags/xz-5.8.1.1.zip"
 
