@@ -96,7 +96,7 @@ jobs:
             url="${SEROM[$name]}"
             file="$(basename "$url")"
             curl -L "$url" -o "$file"
-            unzip -q "$file" -d "$DEPS_ROOT"
+            unzip -q -o "$file" -d "$DEPS_ROOT"
             rm -f "$file"
             mv "$DEPS_ROOT/$name/include"/* "$DEPS_ROOT/include/" 2>/dev/null || true
             mv "$DEPS_ROOT/$name/lib"/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
