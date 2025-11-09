@@ -60,7 +60,7 @@ done
 export CFLAGS="-D__BIONIC_NO_PAGE_SIZE_MACRO"
 export LDFLAGS="-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,-z,max-page-size=16384"
 
-export CPPFLAGS="-I$DEPS_ROOT/include $CPPFLAGS"
+export CFLAGS="-I$DEPS_ROOT/include $CFLAGS"
 export LDFLAGS="-L$DEPS_ROOT/lib $LDFLAGS"
 # Unlike Linux, Android does not implicitly use a dlopened library to resolve
 # relocations in subsequently-loaded libraries, even if RTLD_GLOBAL is used
