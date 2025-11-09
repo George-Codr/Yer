@@ -50,13 +50,13 @@ jobs:
           brew install wget dpkg gh
           brew uninstall gcc || true
           echo "Minimal macOS tools installed."
-      - name: Download CPython source-deps + Serom pre-builts
+      - name: Download prebuilts
+        shell: bash
         run: |
           set -euxo pipefail
           mkdir -p yrtuo/include yrtuo/lib
-          export DEPS_ROOT="$PWD/yrtuo"
+          export DEPS_ROOT="${{ github.workspace }}/yrtuo"
 
-          # Correct associative array syntax
           declare -A DEPS
           DEPS[tcl-core]="https://github.com/python/cpython-source-deps/releases/download/tcl-core-8.6.15.0/tcl-core-8.6.15.0.tar.gz"
           DEPS[tk]="https://github.com/python/cpython-source-deps/releases/download/tk-8.6.15.0/tk-8.6.15.0.tar.gz"
@@ -75,7 +75,7 @@ jobs:
             rm -f "$file"
           done
 
-          # Move extracted content
+          # Move extracted files
           mv "$DEPS_ROOT"/tcl-core-*/include/* "$DEPS_ROOT/include/" 2>/dev/null || true
           mv "$DEPS_ROOT"/tcl-core-*/lib/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
           mv "$DEPS_ROOT"/tk-*/include/*       "$DEPS_ROOT/include/" 2>/dev/null || true
@@ -103,13 +103,7 @@ jobs:
           done
 
           echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
-          echo "All deps in $DEPS_ROOT"
-          ls -R "$DEPS_ROOT/include" "$DEPS_ROOT/lib" | head -n 20
-          done
-
-          echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
-          echo "All deps extracted to $DEPS_ROOT"
-          ls -R "$DEPS_ROOT/include" "$DEPS_ROOT/lib" | head -n 20
+          echo "yrtuo deps ready in $DEPS_ROOT"
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
 
