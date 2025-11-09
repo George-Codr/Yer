@@ -53,13 +53,15 @@ jobs:
       - name: Download CPython source-deps + Serom pre-builts
         run: |
           set -euxo pipefail
-          mkdir -p "$DEPS_ROOT"/{include,lib}
-          declare -A DEPS=(
-            ["tcl-core"]="https://github.com/python/cpython-source-deps/releases/download/tcl-core-8.6.15.0/tcl-core-8.6.15.0.tar.gz"
-            ["tk"]="https://github.com/python/cpython-source-deps/releases/download/tk-8.6.15.0/tk-8.6.15.0.tar.gz"
-            ["libffi"]="https://github.com/python/cpython-source-deps/archive/refs/tags/libffi-3.4.7.zip"
-            ["xz"]="https://github.com/python/cpython-source-deps/archive/refs/tags/xz-5.8.1.1.zip"
-          )
+          mkdir -p yrtuo/include yrtuo/lib
+          export DEPS_ROOT="$PWD/yrtuo"
+
+          # Correct associative array syntax
+          declare -A DEPS
+          DEPS[tcl-core]="https://github.com/python/cpython-source-deps/releases/download/tcl-core-8.6.15.0/tcl-core-8.6.15.0.tar.gz"
+          DEPS[tk]="https://github.com/python/cpython-source-deps/releases/download/tk-8.6.15.0/tk-8.6.15.0.tar.gz"
+          DEPS[libffi]="https://github.com/python/cpython-source-deps/archive/refs/tags/libffi-3.4.7.zip"
+          DEPS[xz]="https://github.com/python/cpython-source-deps/archive/refs/tags/xz-5.8.1.1.zip"
 
           for name in "${!DEPS[@]}"; do
             url="${DEPS[$name]}"
@@ -70,34 +72,39 @@ jobs:
               *.tar.gz) tar -xzf "$file" -C "$DEPS_ROOT" ;;
               *.zip)    unzip -q "$file" -d "$DEPS_ROOT" ;;
             esac
-            rm "$file"
+            rm -f "$file"
           done
 
-          # Move extracted content to the common include/lib dirs
-          mv "$DEPS_ROOT"/tcl-core-*/include/*   "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/tcl-core-*/lib/*      "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/tk-*/include/*        "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/tk-*/lib/*            "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/libffi-*/include/*    "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/libffi-*/lib/*        "$DEPS_ROOT/lib/"     2>/dev/null || true
-          mv "$DEPS_ROOT"/xz-*/include/*        "$DEPS_ROOT/include/" 2>/dev/null || true
-          mv "$DEPS_ROOT"/xz-*/lib/*            "$DEPS_ROOT/lib/"     2>/dev/null || true
-          declare -A SEROM=(
-            ["readline"]="https://github.com/aikwp/Serom/releases/download/vrt/readline-vrt.zip"
-            ["ncurses"]="https://github.com/aikwp/Serom/releases/download/vrt/ncurses-vrt.zip"
-            ["gdbm"]="https://github.com/aikwp/Serom/releases/download/vrt/gdbm-vrt.zip"
-          )
+          # Move extracted content
+          mv "$DEPS_ROOT"/tcl-core-*/include/* "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/tcl-core-*/lib/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/tk-*/include/*       "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/tk-*/lib/*           "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/libffi-*/include/*   "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/libffi-*/lib/*       "$DEPS_ROOT/lib/"     2>/dev/null || true
+          mv "$DEPS_ROOT"/xz-*/include/*       "$DEPS_ROOT/include/" 2>/dev/null || true
+          mv "$DEPS_ROOT"/xz-*/lib/*           "$DEPS_ROOT/lib/"     2>/dev/null || true
+
+          # Serom prebuilts
+          declare -A SEROM
+          SEROM[readline]="https://github.com/aikwp/Serom/releases/download/vrt/readline-vrt.zip"
+          SEROM[ncurses]="https://github.com/aikwp/Serom/releases/download/vrt/ncurses-vrt.zip"
+          SEROM[gdbm]="https://github.com/aikwp/Serom/releases/download/vrt/gdbm-vrt.zip"
 
           for name in "${!SEROM[@]}"; do
             url="${SEROM[$name]}"
             file="$(basename "$url")"
             curl -L "$url" -o "$file"
             unzip -q "$file" -d "$DEPS_ROOT"
-            rm "$file"
-            # assume zip contains <name>/include and <name>/lib
+            rm -f "$file"
             mv "$DEPS_ROOT/$name/include"/* "$DEPS_ROOT/include/" 2>/dev/null || true
             mv "$DEPS_ROOT/$name/lib"/*     "$DEPS_ROOT/lib/"     2>/dev/null || true
             rm -rf "$DEPS_ROOT/$name"
+          done
+
+          echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
+          echo "All deps in $DEPS_ROOT"
+          ls -R "$DEPS_ROOT/include" "$DEPS_ROOT/lib" | head -n 20
           done
 
           echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
