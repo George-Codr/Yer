@@ -117,9 +117,9 @@ jobs:
             #fi
             echo "Extracting data.tar*"
             #ar x "$TMPDIR/$deb" "$DATA_MEMBER"
-            tar -xJf "data.tar.xz" -C "$TMPDIR" || true
-            tar -xzf "data.tar.gz" -C "$TMPDIR" || true
-            
+            ([ -f "data.tar.xz" ] && tar -xJf "data.tar.xz" -C "$TMPDIR") || \
+            ([ -f "data.tar.gz" ] && tar -xzf "data.tar.gz" -C "$TMPDIR") || \
+            ([ -f "data.tar" ] && tar -xf "data.tar" -C "$TMPDIR")
             
             #case "$DATA_MEMBER" in
               #*.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
