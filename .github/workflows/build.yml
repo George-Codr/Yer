@@ -80,19 +80,18 @@ jobs:
           export NM="$TOOLCHAIN/bin/llvm-nm"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
           export SYSROOT="${TOOLCHAIN}/sysroot"
-          export CPPFLAGS="-I${SYSROOT}/usr/include"
-          export LDFLAGS="-L${SYSROOT}/usr/lib -Wl,-rpath-link,${SYSROOT}/usr/lib"
+          export DEPS_ROOT="${{ github.workspace }}/${{ env.DEPS_ROOT }}"
+          export CPPFLAGS="-I${DEPS_ROOT}/include"
+          export LDFLAGS="-L${DEPS_ROOT}/lib -Wl,-rpath-link,${DEPS_ROOT}/lib"
           echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
           echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
           export CPU_COUNT="$(sysctl -n hw.ncpu)"
 
-      - name: Extract Termux .deb packages into NDK sysroot
+      - name: Setup DEPS_ROOT and extract Termux .deb packages
         run: |
           set -euxo pipefail
-          SYSROOT="${{ env.SYSROOT }}"
-          LIBDIR="${SYSROOT}/usr/lib"
-          INCDIR="${SYSROOT}/usr/include"
-          mkdir -p "$LIBDIR" "$INCDIR"
+          DEPS_ROOT="${{ env.DEPS_ROOT }}"
+          mkdir -p "$DEPS_ROOT"/{include,lib,bin,share}
           DEBS=(
             "https://packages.termux.dev/apt/termux-main/pool/main/x/xz-utils/xz-utils_5.8.1-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/t/tcl/tcl_8.6.14-1_aarch64.deb"
@@ -121,14 +120,21 @@ jobs:
             esac
             TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
             if [ -d "$TERMUX_ROOT/usr/lib" ]; then
-              cp -a "$TERMUX_ROOT/usr/lib/"* "$LIBDIR/"
+              cp -a "$TERMUX_ROOT/usr/lib/"* "$DEPS_ROOT/lib/"
             fi
             if [ -d "$TERMUX_ROOT/usr/include" ]; then
-              cp -a "$TERMUX_ROOT/usr/include/"* "$INCDIR/"
+              cp -a "$TERMUX_ROOT/usr/include/"* "$DEPS_ROOT/include/"
+            fi
+            if [ -d "$TERMUX_ROOT/usr/bin" ]; then
+              cp -a "$TERMUX_ROOT/usr/bin/"* "$DEPS_ROOT/bin/"
+            fi
+            if [ -d "$TERMUX_ROOT/usr/share" ]; then
+              cp -a "$TERMUX_ROOT/usr/share/"* "$DEPS_ROOT/share/"
             fi
             rm -f "$TMPDIR/$deb" "$DATA_MEMBER"
             rm -rf "$TMPDIR/data"
           done
+          echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
 
       - name: Download official Python source tarball (from Secret)
         run: |
