@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euxo pipefail
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
-          ls -1 $ANDROID_HOME/ndk/
+          ls -1 "$ANDROID_HOME/ndk/"
 
       - name: Set environment to use SDK/NDK Clang
         run: |
@@ -85,12 +85,14 @@ jobs:
           echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
           echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
           export CPU_COUNT="$(sysctl -n hw.ncpu)"
+          echo "CPU_COUNT=$CPU_COUNT" >> $GITHUB_ENV
 
       - name: Setup DEPS_ROOT and extract Termux .deb packages
         run: |
           set -euxo pipefail
           DEPS_ROOT="${{ env.DEPS_ROOT }}"
           mkdir -p "$DEPS_ROOT"/{include,lib,bin,share}
+
           DEBS=(
             "https://packages.termux.dev/apt/termux-main/pool/main/x/xz-utils/xz-utils_5.8.1-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/t/tcl/tcl_8.6.14-1_aarch64.deb"
@@ -101,48 +103,38 @@ jobs:
             "https://packages.termux.dev/apt/termux-main/pool/main/libu/libuuid/libuuid_2.41.2_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/r/readline/readline_8.3.1-1_aarch64.deb"
           )
+
           TMPDIR=$(mktemp -d)
           trap 'rm -rf "$TMPDIR"' EXIT
+
           for url in "${DEBS[@]}"; do
             deb="$(basename "$url")"
             curl -L "$url" -o "$TMPDIR/$deb"
-            echo "=== Archive members for $deb ==="
-            ar t "$TMPDIR/$deb"
-            ls **
-            #DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar' | sed 's|/$||')
-            #if [ -z "$DATA_MEMBER" ]; then
-              #echo "No data.tar found in $deb"
-              #rm -f "$TMPDIR/$deb"
-              #continue
-            #fi
-            echo "Extracting data.tar*"
-            #ar x "$TMPDIR/$deb" "$DATA_MEMBER"
-            ([ -f "data.tar.xz" ] && tar -xJf "data.tar.xz" -C "$TMPDIR") || \
-            ([ -f "data.tar.gz" ] && tar -xzf "data.tar.gz" -C "$TMPDIR") || \
-            ([ -f "data.tar" ] && tar -xf "data.tar" -C "$TMPDIR")
-            
-            #case "$DATA_MEMBER" in
-              #*.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
-              #*.gz)  tar -xzf "$DATA_MEMBER" -C "$TMPDIR" ;;
-              #*.zst) zstd -d "$DATA_MEMBER" -o - | tar -xf - -C "$TMPDIR" ;;
-              #*)     tar -xf "$DATA_MEMBER" -C "$TMPDIR" ;;
-            #esac
+
+            # Extract .deb using dpkg-deb
+            dpkg-deb -x "$TMPDIR/$deb" "$TMPDIR"
+
+            # Termux prefix: data/data/com.termux/files/usr
             TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
-            if [ -d "$TERMUX_ROOT/usr/lib" ]; then
-              cp -a "$TERMUX_ROOT/usr/lib/"* "$DEPS_ROOT/lib/"
+            if [ ! -d "$TERMUX_ROOT" ]; then
+              echo "Termux root not found in $deb"
+              continue
             fi
-            if [ -d "$TERMUX_ROOT/usr/include" ]; then
-              cp -a "$TERMUX_ROOT/usr/include/"* "$DEPS_ROOT/include/"
-            fi
-            if [ -d "$TERMUX_ROOT/usr/bin" ]; then
-              cp -a "$TERMUX_ROOT/usr/bin/"* "$DEPS_ROOT/bin/"
-            fi
-            if [ -d "$TERMUX_ROOT/usr/share" ]; then
-              cp -a "$TERMUX_ROOT/usr/share/"* "$DEPS_ROOT/share/"
-            fi
+
+            # Copy usr/{lib,include,bin,share} → DEPS_ROOT
+            for dir in lib include bin share; do
+              src="$TERMUX_ROOT/usr/$dir"
+              if [ -d "$src" ]; then
+                cp -a "$src/"* "$DEPS_ROOT/$dir/" 2>/dev/null || true
+              fi
+            done
+
+            # Clean up
             rm -f "$TMPDIR/$deb"
             rm -rf "$TMPDIR/data"
           done
+
+          # Add bin to PATH
           echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
 
       - name: Download official Python source tarball (from Secret)
@@ -162,8 +154,8 @@ jobs:
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
 
-      - name: Build CPython for Android
-        working-directory: ./cpython-${{ matrix.version }}/Android
+      - name: Apply Termux patch and build CPython
+        working-directory: ./cpython-${{ matrix.version }}
         env:
           CC: ${{ env.CC }}
           CXX: ${{ env.CXX }}
@@ -175,16 +167,25 @@ jobs:
           LDFLAGS: ${{ env.LDFLAGS }}
         run: |
           set -euxo pipefail
-          cd ..
-          VERSION="${{ matrix.version }}"
-          case "$VERSION" in
-            3.13.9) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch && git apply termux.patch ;;
-            3.14.0) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch && git apply termux.patch ;;
-            *) echo "Skip patch" ;;
+
+          # Apply Termux patch based on version
+          case "${{ matrix.version }}" in
+            3.13.9)
+              wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch
+              git apply termux.patch
+              ;;
+            3.14.0)
+              wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch
+              git apply termux.patch
+              ;;
+            *) echo "No patch for ${{ matrix.version }}" ;;
           esac
+
+          # Build in Android directory
           cd Android
-          rm -rf android-env.sh
-          wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
-          ls -lh ../cross-build/aarch64-linux-android || true
+
+          # Show output
+          ls -lh ../cross-build/aarch64-linux-android/ || true
+          du -sh ../cross-build/aarch64-linux-android/
