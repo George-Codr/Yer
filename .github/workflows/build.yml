@@ -108,20 +108,24 @@ jobs:
             curl -L "$url" -o "$TMPDIR/$deb"
             echo "=== Archive members for $deb ==="
             ar t "$TMPDIR/$deb"
-            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar' | sed 's|/$||')
-            if [ -z "$DATA_MEMBER" ]; then
-              echo "No data.tar found in $deb"
-              rm -f "$TMPDIR/$deb"
-              continue
+            #DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar' | sed 's|/$||')
+            #if [ -z "$DATA_MEMBER" ]; then
+              #echo "No data.tar found in $deb"
+              #rm -f "$TMPDIR/$deb"
+              #continue
             fi
-            echo "Extracting $DATA_MEMBER"
-            ar x "$TMPDIR/$deb" "$DATA_MEMBER"
-            case "$DATA_MEMBER" in
-              *.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
-              *.gz)  tar -xzf "$DATA_MEMBER" -C "$TMPDIR" ;;
-              *.zst) zstd -d "$DATA_MEMBER" -o - | tar -xf - -C "$TMPDIR" ;;
-              *)     tar -xf "$DATA_MEMBER" -C "$TMPDIR" ;;
-            esac
+            echo "Extracting data.tar*"
+            #ar x "$TMPDIR/$deb" "$DATA_MEMBER"
+            tar -xJf "data.tar.xz" -C "$TMPDIR" || true
+            tar -xzf "data.tar.gz" -C "$TMPDIR" || true
+            
+            
+            #case "$DATA_MEMBER" in
+              #*.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
+              #*.gz)  tar -xzf "$DATA_MEMBER" -C "$TMPDIR" ;;
+              #*.zst) zstd -d "$DATA_MEMBER" -o - | tar -xf - -C "$TMPDIR" ;;
+              #*)     tar -xf "$DATA_MEMBER" -C "$TMPDIR" ;;
+            #esac
             TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
             if [ -d "$TERMUX_ROOT/usr/lib" ]; then
               cp -a "$TERMUX_ROOT/usr/lib/"* "$DEPS_ROOT/lib/"
