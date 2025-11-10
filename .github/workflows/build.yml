@@ -108,7 +108,7 @@ jobs:
             curl -L "$url" -o "$TMPDIR/$deb"
             echo "=== Archive members for $deb ==="
             ar t "$TMPDIR/$deb"
-            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar')
+            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar' | sed 's|/$||')
             if [ -z "$DATA_MEMBER" ]; then
               echo "No data.tar found in $deb"
               rm -f "$TMPDIR/$deb"
