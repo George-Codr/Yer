@@ -21,20 +21,20 @@ jobs:
             filename: Python-3.13.9.tgz
             folder: Python-3.13.9
             url_secret: PY313_URL
-            ndk_version: 27.3.13750724
-            ndk_major: 27
+            ndk_version: 29.0.14206865
+            ndk_major: 29
           - version: 3.14.0
             filename: Python-3.14.0.tgz
             folder: Python-3.14.0
             url_secret: PY314_URL
-            ndk_version: 27.3.13750724
-            ndk_major: 27
+            ndk_version: 29.0.14206865
+            ndk_major: 29
           - version: 3.15.0a1
             filename: Python-3.15.0a1.tgz
             folder: Python-3.15.0a1
             url_secret: PY315_URL
-            ndk_version: 27.3.13750724
-            ndk_major: 27
+            ndk_version: 29.0.14206865
+            ndk_major: 29
 
     env:
       ARCH: aarch64
@@ -45,11 +45,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
       - name: Install minimal macOS tools
         run: |
-          brew install wget dpkg gh bash
+          brew install wget dpkg gh bash zstd
           brew uninstall gcc || true
-          echo "Minimal macOS tools installed."
 
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
@@ -58,12 +58,11 @@ jobs:
         run: |
           set -euxo pipefail
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
-          echo "Android NDK ${ANDROID_NDK_VERSION} installed."
           ls -1 $ANDROID_HOME/ndk/
+
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
-
           export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
           if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
@@ -74,44 +73,26 @@ jobs:
             exit 1
           fi
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-
           export CC="$TOOLCHAIN/bin/clang"
           export CXX="$TOOLCHAIN/bin/clang++"
           export AR="$TOOLCHAIN/bin/llvm-ar"
           export LD="$TOOLCHAIN/bin/ld.lld"
           export NM="$TOOLCHAIN/bin/llvm-nm"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-
-          echo "Using Clang from $TOOLCHAIN"
-          $CC --version
-          export PATH="$DEPS_ROOT/bin:$PATH"
+          export SYSROOT="${TOOLCHAIN}/sysroot"
+          export CPPFLAGS="-I${SYSROOT}/usr/include"
+          export LDFLAGS="-L${SYSROOT}/usr/lib -Wl,-rpath-link,${SYSROOT}/usr/lib"
+          echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
+          echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
           export CPU_COUNT="$(sysctl -n hw.ncpu)"
-          echo "Host environment configured."
-      - name: Extract Termux .deb packages (Termux layout) into NDK sysroot
+
+      - name: Extract Termux .deb packages into NDK sysroot
         run: |
           set -euxo pipefail
-
-          # --------------------------------------------------------------
-          # 1. NDK toolchain & sysroot
-          # --------------------------------------------------------------
-          NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
-            TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
-          elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
-            TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
-          else
-            echo "NDK toolchain not found"
-            exit 1
-          fi
-
-          SYSROOT="${TOOLCHAIN}/sysroot"
+          SYSROOT="${{ env.SYSROOT }}"
           LIBDIR="${SYSROOT}/usr/lib"
           INCDIR="${SYSROOT}/usr/include"
           mkdir -p "$LIBDIR" "$INCDIR"
-
-          # --------------------------------------------------------------
-          # 2. .deb URLs (exactly the ones you gave)
-          # --------------------------------------------------------------
           DEBS=(
             "https://packages.termux.dev/apt/termux-main/pool/main/x/xz-utils/xz-utils_5.8.1-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/t/tcl/tcl_8.6.14-1_aarch64.deb"
@@ -122,71 +103,50 @@ jobs:
             "https://packages.termux.dev/apt/termux-main/pool/main/libu/libuuid/libuuid_2.41.2_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/r/readline/readline_8.3.1-1_aarch64.deb"
           )
-
-          # --------------------------------------------------------------
-          # 3. Temporary extraction directory
-          # --------------------------------------------------------------
           TMPDIR=$(mktemp -d)
           trap 'rm -rf "$TMPDIR"' EXIT
-
           for url in "${DEBS[@]}"; do
             deb="$(basename "$url")"
             curl -L "$url" -o "$TMPDIR/$deb"
-
-            # ---- extract data.tar.xz from .deb (ar archive) ----
-            ar x "$TMPDIR/$deb" data.tar.xz
-            tar -xJf data.tar.xz -C "$TMPDIR"
-
-            # ---- Termux layout: ./data/data/com.termux/files/usr/ ----
-            TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
-            if [ ! -d "$TERMUX_ROOT/usr" ]; then
-              echo "Warning: Expected $TERMUX_ROOT/usr not found in $deb"
+            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -E '^data\.tar\.(xz|gz|zst)$' | head -1)
+            if [ -z "$DATA_MEMBER" ]; then
+              rm -f "$TMPDIR/$deb"
               continue
             fi
-
-            # ---- copy libraries -------------------------------------------------
+            ar x "$TMPDIR/$deb" "$DATA_MEMBER"
+            case "$DATA_MEMBER" in
+              *.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
+              *.gz)  tar -xzf "$DATA_MEMBER" -C "$TMPDIR" ;;
+              *.zst) zstd -d "$DATA_MEMBER" -o - | tar -xf - -C "$TMPDIR" ;;
+            esac
+            TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
             if [ -d "$TERMUX_ROOT/usr/lib" ]; then
               cp -a "$TERMUX_ROOT/usr/lib/"* "$LIBDIR/"
             fi
-
-            # ---- copy headers ---------------------------------------------------
             if [ -d "$TERMUX_ROOT/usr/include" ]; then
               cp -a "$TERMUX_ROOT/usr/include/"* "$INCDIR/"
             fi
-
-            # ---- clean per-deb files -------------------------------------------
-            rm -f "$TMPDIR/$deb" data.tar.xz
+            rm -f "$TMPDIR/$deb" "$DATA_MEMBER"
             rm -rf "$TMPDIR/data"
           done
 
-          echo "All Termux libraries placed in $SYSROOT"
-          echo "Libraries:"
-          ls -lh "$LIBDIR" | head -n 15
-          echo "Headers:"
-          ls -lh "$INCDIR" | head -n 10
       - name: Download official Python source tarball (from Secret)
         run: |
           set -euxo pipefail
           FILE="${{ matrix.filename }}"
           FOLDER="${{ matrix.folder }}"
           VERSION="${{ matrix.version }}"
-
           case "$VERSION" in
             3.13.9) URL="${{ secrets.PY313_URL }}" ;;
             3.14.0) URL="${{ secrets.PY314_URL }}" ;;
             3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
             *) echo "Unknown version $VERSION"; exit 1 ;;
           esac
-
           [ -z "$URL" ] && { echo "Secret for $VERSION missing"; exit 1; }
-
           curl -L "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
-          export CPPFLAGS="-I${SYSROOT}/usr/include"
-          export LDFLAGS="-L${SYSROOT}/usr/lib -Wl,-rpath-link,${SYSROOT}/usr/lib"
-          echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
-          echo "LDFLAGS=$LDFLAGS"   >> $GITHUB_ENV
+
       - name: Build CPython for Android
         working-directory: ./cpython-${{ matrix.version }}/Android
         env:
@@ -196,6 +156,8 @@ jobs:
           LD: ${{ env.LD }}
           NM: ${{ env.NM }}
           RANLIB: ${{ env.RANLIB }}
+          CPPFLAGS: ${{ env.CPPFLAGS }}
+          LDFLAGS: ${{ env.LDFLAGS }}
         run: |
           set -euxo pipefail
           cd ..
@@ -206,10 +168,8 @@ jobs:
             *) echo "Skip patch" ;;
           esac
           cd Android
-          rm -rf android-env.sh 
+          rm -rf android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
-          echo "Build finished for version ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android || true
-
