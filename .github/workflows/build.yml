@@ -79,7 +79,6 @@ jobs:
           export LD="$TOOLCHAIN/bin/ld.lld"
           export NM="$TOOLCHAIN/bin/llvm-nm"
           export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          export SYSROOT="${TOOLCHAIN}/sysroot"
           export DEPS_ROOT="${{ github.workspace }}/${{ env.DEPS_ROOT }}"
           export CPPFLAGS="-I${DEPS_ROOT}/include"
           export LDFLAGS="-L${DEPS_ROOT}/lib -Wl,-rpath-link,${DEPS_ROOT}/lib"
@@ -107,16 +106,21 @@ jobs:
           for url in "${DEBS[@]}"; do
             deb="$(basename "$url")"
             curl -L "$url" -o "$TMPDIR/$deb"
-            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -E '^data\.tar\.(xz|gz|zst)$' | head -1)
+            echo "=== Archive members for $deb ==="
+            ar t "$TMPDIR/$deb"
+            DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar')
             if [ -z "$DATA_MEMBER" ]; then
+              echo "No data.tar found in $deb"
               rm -f "$TMPDIR/$deb"
               continue
             fi
+            echo "Extracting $DATA_MEMBER"
             ar x "$TMPDIR/$deb" "$DATA_MEMBER"
             case "$DATA_MEMBER" in
               *.xz)  tar -xJf "$DATA_MEMBER" -C "$TMPDIR" ;;
               *.gz)  tar -xzf "$DATA_MEMBER" -C "$TMPDIR" ;;
               *.zst) zstd -d "$DATA_MEMBER" -o - | tar -xf - -C "$TMPDIR" ;;
+              *)     tar -xf "$DATA_MEMBER" -C "$TMPDIR" ;;
             esac
             TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
             if [ -d "$TERMUX_ROOT/usr/lib" ]; then
