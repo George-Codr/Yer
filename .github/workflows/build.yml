@@ -108,6 +108,7 @@ jobs:
             curl -L "$url" -o "$TMPDIR/$deb"
             echo "=== Archive members for $deb ==="
             ar t "$TMPDIR/$deb"
+            ls **
             #DATA_MEMBER=$(ar t "$TMPDIR/$deb" | grep -m1 'data\.tar' | sed 's|/$||')
             #if [ -z "$DATA_MEMBER" ]; then
               #echo "No data.tar found in $deb"
@@ -139,7 +140,7 @@ jobs:
             if [ -d "$TERMUX_ROOT/usr/share" ]; then
               cp -a "$TERMUX_ROOT/usr/share/"* "$DEPS_ROOT/share/"
             fi
-            rm -f "$TMPDIR/$deb" "$DATA_MEMBER"
+            rm -f "$TMPDIR/$deb"
             rm -rf "$TMPDIR/data"
           done
           echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
