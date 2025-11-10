@@ -63,7 +63,7 @@ jobs:
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
-          echo "$PATH"
+          export SDFKP="$PATH"
           export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
           if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
@@ -115,18 +115,12 @@ jobs:
           for url in "${DEBS[@]}"; do
             deb="$(basename "$url")"
             curl -L "$url" -o "$TMPDIR/$deb"
-
-            # Extract .deb using dpkg-deb
             dpkg-deb -x "$TMPDIR/$deb" "$TMPDIR"
-
-            # Termux prefix: data/data/com.termux/files/usr
             TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
             if [ ! -d "$TERMUX_ROOT" ]; then
               echo "Termux root not found in $deb"
               continue
             fi
-
-            # Copy usr/{lib,include,bin,share} → DEPS_ROOT
             for dir in lib include bin share; do
               src="$TERMUX_ROOT/usr/$dir"
               if [ -d "$src" ]; then
@@ -170,6 +164,7 @@ jobs:
           LDFLAGS: ${{ env.LDFLAGS }}
         run: |
           set -euxo pipefail
+          export PATH="$SDFKP"
           rm -f android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           case "${{ matrix.version }}" in
@@ -183,10 +178,10 @@ jobs:
               ;;
             *) echo "No patch for ${{ matrix.version }}" ;;
           esac
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
+          
           cd Android
           ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
-
-          # Show output
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
