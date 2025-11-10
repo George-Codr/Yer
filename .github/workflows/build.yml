@@ -72,7 +72,7 @@ jobs:
             echo "NDK toolchain not found"
             exit 1
           fi
-          export MINIMAL_PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin"
+          export MINIMAL_PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
           echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
           echo "PATH=$MINIMAL_PATH" >> $GITHUB_ENV
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
