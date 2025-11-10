@@ -93,6 +93,7 @@ jobs:
       - name: Setup DEPS_ROOT and extract Termux .deb packages
         run: |
           set -euxo pipefail
+          export PATH="/opt/homebrew/bin:$PATH"
           DEPS_ROOT="${{ env.DEPS_ROOT }}"
           mkdir -p "$DEPS_ROOT"/{include,lib,bin,share}
 
