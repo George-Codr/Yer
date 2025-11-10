@@ -113,7 +113,7 @@ jobs:
               #echo "No data.tar found in $deb"
               #rm -f "$TMPDIR/$deb"
               #continue
-            fi
+            #fi
             echo "Extracting data.tar*"
             #ar x "$TMPDIR/$deb" "$DATA_MEMBER"
             tar -xJf "data.tar.xz" -C "$TMPDIR" || true
