@@ -63,7 +63,7 @@ jobs:
       - name: Set environment to use SDK/NDK Clang
         run: |
           set -euxo pipefail
-          export SDFKP="$PATH"
+          echo "export SDFKP=$PATH" >> $GITHUB_ENV
           export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
           if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
             export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
