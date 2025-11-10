@@ -72,6 +72,9 @@ jobs:
             echo "NDK toolchain not found"
             exit 1
           fi
+          export MINIMAL_PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin"
+          echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
+          echo "PATH=$MINIMAL_PATH" >> $GITHUB_ENV
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           export CC="$TOOLCHAIN/bin/clang"
           export CXX="$TOOLCHAIN/bin/clang++"
@@ -133,8 +136,6 @@ jobs:
             rm -f "$TMPDIR/$deb"
             rm -rf "$TMPDIR/data"
           done
-
-          # Add bin to PATH
           echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
 
       - name: Download official Python source tarball (from Secret)
@@ -167,8 +168,8 @@ jobs:
           LDFLAGS: ${{ env.LDFLAGS }}
         run: |
           set -euxo pipefail
-
-          # Apply Termux patch based on version
+          rm -f android-env.sh
+          wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           case "${{ matrix.version }}" in
             3.13.9)
               wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch
@@ -180,8 +181,6 @@ jobs:
               ;;
             *) echo "No patch for ${{ matrix.version }}" ;;
           esac
-
-          # Build in Android directory
           cd Android
           ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
