@@ -183,7 +183,8 @@ jobs:
           export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
           
           cd Android
-          /opt/homebrew/bin/python3 ./android.py clean
-          ./android.py ci --fast-ci aarch64-linux-android
+          /opt/homebrew/bin/python3.13 --version
+          /opt/homebrew/bin/python3.13 ./android.py clean
+          /opt/homebrew/bin/python3.13 ./android.py ci --fast-ci aarch64-linux-android
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
