@@ -60,13 +60,6 @@ jobs:
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
           ls -1 "$ANDROID_HOME/ndk/"
 
-      #
-      # ⛔ STEP REMOVED ⛔
-      # The 'Set environment to use SDK/NDK Clang' step was removed.
-      # It was poisoning the environment for the host-python build.
-      # The android.py script handles the NDK environment internally.
-      #
-
       - name: Setup DEPS_ROOT and extract Termux .deb packages
         run: |
           set -euxo pipefail
@@ -103,8 +96,6 @@ jobs:
                 cp -a "$src/"* "$DEPS_ROOT/$dir/" 2>/dev/null || true
               fi
             done
-
-            # Clean up
             rm -f "$TMPDIR/$deb"
             rm -rf "$TMPDIR/data"
           done
@@ -118,7 +109,7 @@ jobs:
           VERSION="${{ matrix.version }}"
           case "$VERSION" in
             3.13.9) URL="${{ secrets.PY313_URL }}" ;;
-            3.14.0) URL="${{ secrets.PY314_URL }}" ;;
+            3.14.0) URL="${{ secrets.PY3IA_URL }}" ;;
             3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
             *) echo "Unknown version $VERSION"; exit 1 ;;
           esac
@@ -131,11 +122,6 @@ jobs:
         working-directory: ./cpython-${{ matrix.version }}
         run: |
           set -euxo pipefail
-
-          # ⭐ FIX: Set flags *only* for this step.
-          # The android.py script (after being patched) will use these
-          # for the *target* build, while the *host* build runs correctly
-          # with the native system compiler.
           export DEPS_ROOT="${{ github.workspace }}/${{ env.DEPS_ROOT }}"
           export CPPFLAGS="-I${DEPS_ROOT}/include"
           export LDFLAGS="-L${DEPS_ROOT}/lib -Wl,-rpath-link,${DEPS_ROOT}/lib"
