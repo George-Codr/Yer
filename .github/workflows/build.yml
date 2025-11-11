@@ -162,9 +162,10 @@ jobs:
           RANLIB: ${{ env.RANLIB }}
           CPPFLAGS: ${{ env.CPPFLAGS }}
           LDFLAGS: ${{ env.LDFLAGS }}
+          TRPO: ${{ env.SDFKP }}
         run: |
           set -euxo pipefail
-          export PATH="$SDFKP"
+          export PATH="$TRPO"
           rm -f android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           case "${{ matrix.version }}" in
