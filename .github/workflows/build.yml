@@ -21,20 +21,20 @@ jobs:
             filename: Python-3.13.9.tgz
             folder: Python-3.13.9
             url_secret: PY313_URL
-            ndk_version: 29.0.14206865
-            ndk_major: 29
+            ndk_version: 27.3.13750724
+            ndk_major: 27
           - version: 3.14.0
             filename: Python-3.14.0.tgz
             folder: Python-3.14.0
             url_secret: PY314_URL
-            ndk_version: 29.0.14206865
-            ndk_major: 29
+            ndk_version: 27.3.13750724
+            ndk_major: 27
           - version: 3.15.0a1
             filename: Python-3.15.0a1.tgz
             folder: Python-3.15.0a1
             url_secret: PY315_URL
-            ndk_version: 29.0.14206865
-            ndk_major: 29
+            ndk_version: 27.3.13750724
+            ndk_major: 27
 
     env:
       ARCH: aarch64
@@ -60,37 +60,12 @@ jobs:
           sdkmanager "ndk;${ANDROID_NDK_VERSION}"
           ls -1 "$ANDROID_HOME/ndk/"
 
-      - name: Set environment to use SDK/NDK Clang
-        run: |
-          set -euxo pipefail
-          echo $PATH
-          echo "export SDFKP=$PATH" >> $GITHUB_ENV
-          export NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          if [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64" ]; then
-            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64"
-          elif [ -d "$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64" ]; then
-            export TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-arm64"
-          else
-            echo "NDK toolchain not found"
-            exit 1
-          fi
-          export MINIMAL_PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
-          echo "TOOLCHAIN=$TOOLCHAIN" >> $GITHUB_ENV
-          echo "PATH=$MINIMAL_PATH" >> $GITHUB_ENV
-          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-          export CC="$TOOLCHAIN/bin/clang"
-          export CXX="$TOOLCHAIN/bin/clang++"
-          export AR="$TOOLCHAIN/bin/llvm-ar"
-          export LD="$TOOLCHAIN/bin/ld.lld"
-          export NM="$TOOLCHAIN/bin/llvm-nm"
-          export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
-          export DEPS_ROOT="${{ github.workspace }}/${{ env.DEPS_ROOT }}"
-          export CPPFLAGS="-I${DEPS_ROOT}/include"
-          export LDFLAGS="-L${DEPS_ROOT}/lib -Wl,-rpath-link,${DEPS_ROOT}/lib"
-          echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
-          echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
-          export CPU_COUNT="$(sysctl -n hw.ncpu)"
-          echo "CPU_COUNT=$CPU_COUNT" >> $GITHUB_ENV
+      #
+      # ⛔ STEP REMOVED ⛔
+      # The 'Set environment to use SDK/NDK Clang' step was removed.
+      # It was poisoning the environment for the host-python build.
+      # The android.py script handles the NDK environment internally.
+      #
 
       - name: Setup DEPS_ROOT and extract Termux .deb packages
         run: |
@@ -154,19 +129,18 @@ jobs:
 
       - name: Apply Termux patch and build CPython
         working-directory: ./cpython-${{ matrix.version }}
-        env:
-          CC: ${{ env.CC }}
-          CXX: ${{ env.CXX }}
-          AR: ${{ env.AR }}
-          LD: ${{ env.LD }}
-          NM: ${{ env.NM }}
-          RANLIB: ${{ env.RANLIB }}
-          CPPFLAGS: ${{ env.CPPFLAGS }}
-          LDFLAGS: ${{ env.LDFLAGS }}
-          TRPO: ${{ env.SDFKP }}
         run: |
           set -euxo pipefail
-          export PATH=/Users/runner/Library/Android/sdk/platform-tools:/Users/runner/Library/Android/sdk/cmdline-tools/16.0/bin:/opt/homebrew/lib/ruby/gems/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/runner/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Users/runner/.yarn/bin:/Users/runner/Library/Android/sdk/tools:/Users/runner/Library/Android/sdk/platform-tools:/Library/Frameworks/Python.framework/Versions/Current/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/usr/bin:/bin:/usr/sbin:/sbin:/Users/runner/.dotnet/tools
+
+          # ⭐ FIX: Set flags *only* for this step.
+          # The android.py script (after being patched) will use these
+          # for the *target* build, while the *host* build runs correctly
+          # with the native system compiler.
+          export DEPS_ROOT="${{ github.workspace }}/${{ env.DEPS_ROOT }}"
+          export CPPFLAGS="-I${DEPS_ROOT}/include"
+          export LDFLAGS="-L${DEPS_ROOT}/lib -Wl,-rpath-link,${DEPS_ROOT}/lib"
+          export CPU_COUNT="$(sysctl -n hw.ncpu)"
+
           rm -f android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           case "${{ matrix.version }}" in
@@ -180,7 +154,6 @@ jobs:
               ;;
             *) echo "No patch for ${{ matrix.version }}" ;;
           esac
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
           
           cd Android
           /opt/homebrew/bin/python3.13 --version
