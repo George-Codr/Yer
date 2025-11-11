@@ -48,8 +48,6 @@ jobs:
 
       - name: Install minimal macOS tools
         run: |
-          which python3.13
-          python3.13 --version
           brew install wget dpkg gh bash zstd
           brew uninstall gcc || true
 
@@ -182,10 +180,10 @@ jobs:
               ;;
             *) echo "No patch for ${{ matrix.version }}" ;;
           esac
-          export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
           
           cd Android
-          ./android.py clean
+          /opt/homebrew/bin/python3 ./android.py clean
           ./android.py ci --fast-ci aarch64-linux-android
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
