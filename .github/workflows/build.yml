@@ -182,7 +182,7 @@ jobs:
               ;;
             *) echo "No patch for ${{ matrix.version }}" ;;
           esac
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
+          export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$TOOLCHAIN/bin:/opt/homebrew/bin"
           
           cd Android
           ./android.py clean
