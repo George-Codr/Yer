@@ -166,7 +166,7 @@ jobs:
           TRPO: ${{ env.SDFKP }}
         run: |
           set -euxo pipefail
-          export PATH="$TRPO"
+          export PATH=/Users/runner/Library/Android/sdk/platform-tools:/Users/runner/Library/Android/sdk/cmdline-tools/16.0/bin:/opt/homebrew/lib/ruby/gems/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/runner/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/runner/.cargo/bin:/usr/local/opt/curl/bin:/usr/local/bin:/usr/local/sbin:/Users/runner/bin:/Users/runner/.yarn/bin:/Users/runner/Library/Android/sdk/tools:/Users/runner/Library/Android/sdk/platform-tools:/Library/Frameworks/Python.framework/Versions/Current/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/usr/bin:/bin:/usr/sbin:/sbin:/Users/runner/.dotnet/tools
           rm -f android-env.sh
           wget https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh
           case "${{ matrix.version }}" in
