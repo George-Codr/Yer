@@ -148,7 +148,7 @@ jobs:
           esac
           cd Android
           python3 ./android.py clean || true
-          python3 ./android.py ci --fast-ci aarch64-linux-android || ls
+          python3 ./android.py ci --fast-ci aarch64-linux-android || ls /Users/runner/work/Yer/Yer/cpython-"${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
 
