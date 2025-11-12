@@ -134,8 +134,8 @@ jobs:
           LDFLAGS: -L${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib -Wl,-rpath-link,${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib
         run: |
           set -euxo pipefail
-          "$NDK_CLANG" --version
-          "$NDK_CLANGXX" --version
+          "$CC" --version
+          "$CXX" --version
           curl -fsSL https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh -o android-env.sh
           chmod +x android-env.sh
           case "${{ matrix.version }}" in
