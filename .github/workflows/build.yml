@@ -11,17 +11,14 @@ permissions:
   contents: read
 
 jobs:
-  build-template:
-    # ------------------------------------------------------------------
-    # Only run in the exact repository you expect
-    # ------------------------------------------------------------------
+  build-android:
     if: >-
       ${{ github.repository_owner == 'George-Codr' &&
           github.event.repository.name == 'Yer' }}
 
-    name: Build Android Python (${{ matrix.version }}) NDK ${{ matrix.ndk_major }}
+    name: Python ${{ matrix.version }} to aarch64-linux-android (NDK clang only)
     runs-on: macos-14
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     strategy:
       fail-fast: false
@@ -32,60 +29,44 @@ jobs:
             folder: Python-3.13.9
             url_secret: PY313_URL
             ndk_version: 27.3.13750724
-            ndk_major: 27
           - version: 3.14.0
             filename: Python-3.14.0.tgz
             folder: Python-3.14.0
-            url_secret: PY314_URL          # <-- fixed typo (was PY3IA_URL)
+            url_secret: PY314_URL
             ndk_version: 27.3.13750724
-            ndk_major: 27
           - version: 3.15.0a1
             filename: Python-3.15.0a1.tgz
             folder: Python-3.15.0a1
             url_secret: PY315_URL
             ndk_version: 27.3.13750724
-            ndk_major: 27
 
     env:
       ARCH: aarch64
       ANDROID_NDK_VERSION: ${{ matrix.ndk_version }}
-      LLVM_VERSION: 21
       DEPS_ROOT: yrtuo
-      # Homebrew on macOS-14 is installed under /opt/homebrew
-      HOMEBREW_PREFIX: /opt/homebrew
+      NDK_ROOT: ${{ github.workspace }}/android-ndk-r${{ matrix.ndk_version }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # ------------------------------------------------------------------
-      # Install the minimal macOS tools we need
-      # ------------------------------------------------------------------
-      - name: Install minimal macOS tools
+      - name: Install minimal tools
         run: |
-          brew install wget dpkg gh bash zstd
+          brew install wget dpkg bash zstd curl
           brew uninstall gcc || true
-
-      # ------------------------------------------------------------------
-      # Android SDK + NDK (official action)
-      # ------------------------------------------------------------------
-      - name: Set up Android SDK + NDK
-        uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
         run: |
           set -euxo pipefail
           sdkmanager "ndk;${{ env.ANDROID_NDK_VERSION }}"
-          ls -1 "$ANDROID_HOME/ndk/"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}" >> $GITHUB_ENV
+          ln -s "$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}" "${{ env.NDK_ROOT }}"
 
-      # ------------------------------------------------------------------
-      # Pull Termux .deb packages and unpack them into $DEPS_ROOT
-      # ------------------------------------------------------------------
-      - name: Setup DEPS_ROOT and extract Termux .deb packages
+      - name: Extract Termux deps
         run: |
           set -euxo pipefail
           DEPS_ROOT="${{ env.DEPS_ROOT }}"
-          mkdir -p "$DEPS_ROOT"/{include,lib,bin,share}
+          mkdir -p "$DEPS_ROOT"/{lib,include,bin,share}
 
           DEBS=(
             "https://packages.termux.dev/apt/termux-main/pool/main/x/xz-utils/xz-utils_5.8.1-1_aarch64.deb"
@@ -98,34 +79,26 @@ jobs:
             "https://packages.termux.dev/apt/termux-main/pool/main/r/readline/readline_8.3.1-2_aarch64.deb"
           )
 
-          TMPDIR=$(mktemp -d)
-          trap 'rm -rf "$TMPDIR"' EXIT
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
 
           for url in "${DEBS[@]}"; do
-            deb="$(basename "$url")"
-            curl -fsSL "$url" -o "$TMPDIR/$deb"
-            dpkg-deb -x "$TMPDIR/$deb" "$TMPDIR"
-            TERMUX_ROOT="$TMPDIR/data/data/com.termux/files"
-            if [ ! -d "$TERMUX_ROOT" ]; then
-              echo "Termux root not found in $deb"
-              continue
-            fi
-            for dir in lib include bin share; do
-              src="$TERMUX_ROOT/usr/$dir"
-              if [ -d "$src" ]; then
-                cp -a "$src/"* "$DEPS_ROOT/$dir/" 2>/dev/null || true
-              fi
+            deb=$(basename "$url")
+            curl -fsSL "$url" -o "$TMP/$deb"
+            dpkg-deb -x "$TMP/$deb" "$TMP"
+            root="$TMP/data/data/com.termux/files"
+            [ -d "$root" ] || continue
+            for d in lib include bin share; do
+              src="$root/usr/$d"
+              [ -d "$src" ] && cp -a "$src/"* "$DEPS_ROOT/$d/" 2>/dev/null || true
             done
-            rm -f "$TMPDIR/$deb"
-            rm -rf "$TMPDIR/data"
+            rm -f "$TMP/$deb"
+            rm -rf "$TMP/data"
           done
 
-          echo "$DEPS_ROOT/bin" >> "$GITHUB_PATH"
+          echo "$DEPS_ROOT/bin" >> $GITHUB_PATH
 
-      # ------------------------------------------------------------------
-      # Download the official CPython tarball using the per-version secret
-      # ------------------------------------------------------------------
-      - name: Download official Python source tarball (from Secret)
+      - name: Download CPython source
         run: |
           set -euxo pipefail
           FILE="${{ matrix.filename }}"
@@ -134,42 +107,36 @@ jobs:
 
           case "$VERSION" in
             3.13.9)  URL="${{ secrets.PY313_URL }}" ;;
-            3.14.0)  URL="${{ secrets.PY314_URL }}" ;;   # <-- fixed
+            3.14.0)  URL="${{ secrets.PY314_URL }}" ;;
             3.15.0a1)URL="${{ secrets.PY315_URL }}" ;;
-            *) echo "Unknown version $VERSION"; exit 1 ;;
+            *) echo "Unknown version"; exit 1 ;;
           esac
 
-          [ -z "$URL" ] && { echo "Secret for $VERSION missing"; exit 1; }
-
+          [ -z "$URL" ] && { echo "Missing secret"; exit 1; }
           curl -fsSL "$URL" -o "$FILE"
           tar -xzf "$FILE"
           mv "$FOLDER" "cpython-${VERSION}"
 
-      # ------------------------------------------------------------------
-      # Apply Termux patches (if any) and run the Android cross-build
-      # ------------------------------------------------------------------
-      - name: Apply Termux patch and build CPython
+      - name: Build with NDK clang only
         working-directory: ./cpython-${{ matrix.version }}
         env:
           DEPS_ROOT: ${{ github.workspace }}/${{ env.DEPS_ROOT }}
+          NDK_CLANG: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang
+          NDK_CLANGXX: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++
+          NDK_AR: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar
+          NDK_RANLIB: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ranlib
+          HOST_CC: ${{ env.NDK_CLANG }}
+          HOST_CXX: ${{ env.NDK_CLANGXX }}
+          HOST_AR: ${{ env.NDK_AR }}
+          HOST_RANLIB: ${{ env.NDK_RANLIB }}
           CPPFLAGS: -I${{ github.workspace }}/${{ env.DEPS_ROOT }}/include
-          LDFLAGS: >-
-            -L${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib
-            -Wl,-rpath-link,${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib
-          CPU_COUNT: $(sysctl -n hw.ncpu)
+          LDFLAGS: -L${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib -Wl,-rpath-link,${{ github.workspace }}/${{ env.DEPS_ROOT }}/lib
         run: |
           set -euxo pipefail
-
-          # ----------------------------------------------------------------
-          # Grab the helper script that sets up the cross-compile env
-          # ----------------------------------------------------------------
-          rm -f android-env.sh
+          "$NDK_CLANG" --version
+          "$NDK_CLANGXX" --version
           curl -fsSL https://raw.githubusercontent.com/George-Codr/Yer/refs/heads/main/android-env.sh -o android-env.sh
           chmod +x android-env.sh
-
-          # ----------------------------------------------------------------
-          # Apply version-specific Termux patches
-          # ----------------------------------------------------------------
           case "${{ matrix.version }}" in
             3.13.9)
               curl -fsSL https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch -o termux.patch
@@ -179,19 +146,15 @@ jobs:
               curl -fsSL https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch -o termux.patch
               git apply termux.patch
               ;;
-            *) echo "No Termux patch for ${{ matrix.version }}" ;;
           esac
-
-          # ----------------------------------------------------------------
-          # Run the Android build script (uses the host Python 3.13 from Homebrew)
-          # ----------------------------------------------------------------
           cd Android
-          "${{ env.HOMEBREW_PREFIX }}/bin/python3.13" --version
-          "${{ env.HOMEBREW_PREFIX }}/bin/python3.13" ./android.py clean
-          "${{ env.HOMEBREW_PREFIX }}/bin/python3.13" ./android.py ci --fast-ci aarch64-linux-android
-
-          # ----------------------------------------------------------------
-          # Show the resulting cross-build tree (optional, for debugging)
-          # ----------------------------------------------------------------
+          python3 ./android.py clean || true
+          python3 ./android.py ci aarch64-linux-android
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
+
+      - name: Upload Android Python build
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-${{ matrix.version }}-aarch64-android
+          path: cpython-${{ matrix.version }}/cross-build/aarch64-linux-android/
