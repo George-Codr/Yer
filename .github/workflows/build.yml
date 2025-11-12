@@ -192,12 +192,24 @@ jobs:
           EOF
           chmod 755 "$DEB_DIR/DEBIAN/postinst"
 
-          dpkg-deb --build "$DEB_DIR" "${PKG_NAME}_${PKG_VERSION}_${ARCH}.deb"
+          dpkg-deb --build "$DEB_DIR" pyv_${{ matrix.version }}_aarch64.deb
 
-      - name: Upload Debian package
-        uses: actions/upload-artifact@v5
+      - name: Create / Update GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: pyv____${{ matrix.version }}_aarch64
-          path: pyv*_${{ matrix.version }}_aarch64.deb
-          if-no-files-found: error
+          tag_name: v${{ matrix.version }}-aarch64
+          name: pyv ${{ matrix.version }} (aarch64)
+          body: |
+            **Python:** ${{ matrix.version }}
+            **Arch:** aarch64
+            **Commit:** ${{ github.sha }}
+            **Workflow run:** ${{ github.run_id }}
+
+            Built automatically by GitHub Actions.
+          files: |
+            pyv*_${{ matrix.version }}_aarch64.deb
+          fail_on_unmatched_files: true
           overwrite: true
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
