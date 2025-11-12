@@ -122,8 +122,8 @@ jobs:
         working-directory: ./cpython-${{ matrix.version }}
         env:
           DEPS_ROOT: ${{ github.workspace }}/${{ env.DEPS_ROOT }}
-          NDK_CLANG: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang
-          NDK_CLANGXX: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++
+          CC: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang
+          CXX: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++
           NDK_AR: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar
           NDK_RANLIB: ${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ranlib
           HOST_CC: ${{ env.NDK_CLANG }}
@@ -154,8 +154,3 @@ jobs:
           ls -lh ../cross-build/aarch64-linux-android/ || true
           du -sh ../cross-build/aarch64-linux-android/
 
-      - name: Upload Android Python build
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-${{ matrix.version }}-aarch64-android
-          path: cpython-${{ matrix.version }}/cross-build/aarch64-linux-android/
