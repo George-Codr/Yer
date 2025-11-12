@@ -91,10 +91,10 @@ jobs:
             "https://packages.termux.dev/apt/termux-main/pool/main/x/xz-utils/xz-utils_5.8.1-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/t/tcl/tcl_8.6.14-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/t/tk/tk_8.6.14-1_aarch64.deb"
-            "https://packages.termux.dev/apt/termux-main/pool/main/l/libffi/libffi_3.4.7-1_aarch64.deb"
+            "https://packages.termux.dev/apt/termux-main/pool/main/libf/libffi/libffi_3.4.7-1_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/n/ncurses/ncurses_6.5.20240831-3_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/g/gdbm/gdbm_1.26-1_aarch64.deb"
-            "https://packages.termux.dev/apt/termux-main/pool/main/l/libuuid/libuuid_2.41.2_aarch64.deb"
+            "https://packages.termux.dev/apt/termux-main/pool/main/libu/libuuid/libuuid_2.41.2_aarch64.deb"
             "https://packages.termux.dev/apt/termux-main/pool/main/r/readline/readline_8.3.1-1_aarch64.deb"
           )
 
