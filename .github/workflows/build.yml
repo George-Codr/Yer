@@ -226,7 +226,7 @@ jobs:
     if: ${{ github.repository_owner == 'aikwp' && github.event.repository.name == 'Serom' }}
     steps:
       - name: Download All .deb Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: all-debs
       - name: Prepare Release Assets
