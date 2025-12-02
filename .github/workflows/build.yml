@@ -223,7 +223,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'aikwp' && github.event.repository.name == 'Serom' }}
+    if: ${{ github.repository_owner == 'George-Codr' && github.event.repository.name == 'Yer' }}
     steps:
       - name: Download All .deb Artifacts
         uses: actions/download-artifact@v6
