@@ -209,8 +209,9 @@ jobs:
           body: |
             **Python:** ${{ matrix.version }}
             **Arch:** aarch64
+            **NDK:** r27
             **Commit:** ${{ github.sha }}
-            **Workflow run:** ${{ github.run_id }}
+            **Run:** ${{ github.run_id }}
 
             Built automatically by GitHub Actions.
           files: |
