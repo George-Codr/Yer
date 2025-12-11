@@ -207,7 +207,7 @@ jobs:
           tag_name: pyv__a
           name: pyv
           body: |
-            **Python:** ${{ matrix.version }}
+            **Python:** 3.13,3.14,3.15
             **Arch:** aarch64
             **NDK:** r27
             **Commit:** ${{ github.sha }}
