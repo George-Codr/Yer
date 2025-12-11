@@ -20,21 +20,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - version: 3.13.9
-            filename: Python-3.13.9.tgz
-            folder: Python-3.13.9
+          - version: 3.13.11
+            filename: Python-3.13.11.tgz
+            folder: Python-3.13.11
             url_secret: PY313_URL
             ndk_version: 27.3.13750724
             ndk_major: 27
-          - version: 3.14.0
-            filename: Python-3.14.0.tgz
-            folder: Python-3.14.0
+          - version: 3.14.2
+            filename: Python-3.14.2.tgz
+            folder: Python-3.14.2
             url_secret: PY314_URL
             ndk_version: 27.3.13750724
             ndk_major: 27
-          - version: 3.15.0a1
-            filename: Python-3.15.0a1.tgz
-            folder: Python-3.15.0a1
+          - version: 3.15.0a2
+            filename: Python-3.15.0a2.tgz
+            folder: Python-3.15.0a2
             url_secret: PY315_URL
             ndk_version: 27.3.13750724
             ndk_major: 27
@@ -121,9 +121,9 @@ jobs:
 
           # Select correct secret directly by version
           case "$VERSION" in
-            3.13.9) URL="${{ secrets.PY313_URL }}" ;;
-            3.14.0) URL="${{ secrets.PY314_URL }}" ;;
-            3.15.0a1) URL="${{ secrets.PY315_URL }}" ;;
+            3.13.11) URL="${{ secrets.PY313_URL }}" ;;
+            3.14.2) URL="${{ secrets.PY314_URL }}" ;;
+            3.15.0a2) URL="${{ secrets.PY315_URL }}" ;;
             *) echo "❌ Unknown version $VERSION"; exit 1 ;;
           esac
 
@@ -152,8 +152,8 @@ jobs:
           cd ..
           VERSION="${{ matrix.version }}"
           case "$VERSION" in
-            3.13.9) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch && git apply termux.patch ;;
-            3.14.0) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch && git apply termux.patch ;;
+            3.13.11) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch && git apply termux.patch ;;
+            3.14.2) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/refs/heads/main/termux.patch && git apply termux.patch ;;
             *) echo "Skip" ;;
           esac
           cd Android
@@ -223,7 +223,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'George-Codr' && github.event.repository.name == 'Yer' }}
+    if: ${{ github.repository_owner == 'George-Cor' && github.event.repository.name == 'Yer' }}
     steps:
       - name: Download All .deb Artifacts
         uses: actions/download-artifact@v6
