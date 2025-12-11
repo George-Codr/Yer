@@ -204,8 +204,8 @@ jobs:
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ matrix.version }}-aarch64
-          name: pyv ${{ matrix.version }} (aarch64)
+          tag_name: pyv__a
+          name: pyv
           body: |
             **Python:** ${{ matrix.version }}
             **Arch:** aarch64
