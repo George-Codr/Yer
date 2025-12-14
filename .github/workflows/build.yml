@@ -221,47 +221,4 @@ jobs:
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'George-Cor' && github.event.repository.name == 'Yer' }}
-    steps:
-      - name: Download All .deb Artifacts
-        uses: actions/download-artifact@v6
-        with:
-          path: all-debs
-      - name: Prepare Release Assets
-        run: |
-          mkdir -p release-assets
-          find all-debs -name "*.deb" -exec cp {} release-assets/ \;
-          ls -lh release-assets/
-      - name: Determine Latest Version
-        id: latest
-        run: |
-          versions=()
-          for f in release-assets/*.deb; do
-            ver=$(basename "$f" | grep -oP 'pyv\K[0-9a\.]+')
-            versions+=("$ver")
-          done
-          latest=$(printf '%s\n' "${versions[@]}" | sort -V | tail -1)
-          echo "latest=$latest" >> $GITHUB_OUTPUT
-          echo "Latest version: $latest"
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: Tree
-          name: Tree
-          body: |
-            Latest: ${{ steps.latest.outputs.latest }}
-            NDK: r27
-            Arch: aarch64
-            Commit: ${{ github.sha }}
-            Run: ${{ github.run_id }}
-            Built with GitHub Actions on macOS 14.
-          files: |
-            release-assets/*.deb
-          draft: false
-          overwrite_files: true
-          prerelease: false
-          fail_on_unmatched_files: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+
