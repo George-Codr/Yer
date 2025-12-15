@@ -139,7 +139,7 @@ jobs:
           
 
       - name: Build CPython for Android
-        working-directory: ./cpython-${{ matrix.version }}/Android
+        working-directory: ./cpython-${{ matrix.version }}
         env:
           CC: ${{ env.CC }}
           CXX: ${{ env.CXX }}
@@ -157,7 +157,7 @@ jobs:
             *) echo "Skip" ;;
           esac
           cd Android
-          ./android.py ci --fast-ci aarch64-linux-android
+          ./Android/android.py ci --fast-ci aarch64-linux-android
           echo "✅ Build finished for version ${{ matrix.version }}"
           ls -lh ../cross-build/aarch64-linux-android || echo "⚠️ Build output not found"
 #          ../cross-build/aarch64-linux-android/prefix/bin/python3 -c "print(__import__('sys').version)"
@@ -200,7 +200,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: deb-pyv${{ matrix.version }}
-          path: deb-build/pyv_${{ matrix.version }}_aarch64.deb
+          path: pyv_${{ matrix.version }}_aarch64.deb
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
