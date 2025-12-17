@@ -17,7 +17,7 @@ jobs:
     env:
       API_LEVEL: 35
       ARCH: aarch64
-      NDK_VERSION: 29.0.14206865
+      NDK_VERSION: 27.3.13750724
       BASE_PREFIX: /opt/android-optional-deps-aarch64
       PREFIX: /opt/android-optional-deps-aarch64/${{ matrix.dep }}
       TOOLCHAIN_BASE: ${{ github.workspace }}/ndk/toolchains/llvm/prebuilt/darwin-x86_64
