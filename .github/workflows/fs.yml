@@ -56,8 +56,8 @@ jobs:
       - name: Build libuuid from e2fsprogs (if selected)
         if: matrix.dep == 'libuuid'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
           CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
@@ -76,8 +76,8 @@ jobs:
       - name: Build gdbm (if selected)
         if: matrix.dep == 'gdbm'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
           CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
@@ -94,8 +94,8 @@ jobs:
       - name: Build ncursesw (if selected)
         if: matrix.dep == 'ncursesw'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
           CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
@@ -114,8 +114,8 @@ jobs:
       - name: Build readline (if selected)
         if: matrix.dep == 'readline'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
           CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
