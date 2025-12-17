@@ -35,7 +35,7 @@ jobs:
         run: |
           mkdir -p poll
           mkdir -p poll/android-optional-deps-aarch64
-          mdkir -p ${{ env.PREFIX }}
+          mkdir -p ${{ env.PREFIX }}
           mkdir -p $HOME/android/cmdline-tools
           cd $HOME/android/cmdline-tools
           curl -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
