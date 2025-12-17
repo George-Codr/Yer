@@ -18,8 +18,8 @@ jobs:
       API_LEVEL: 35
       ARCH: aarch64
       NDK_VERSION: 27.3.13750724
-      BASE_PREFIX: /opt/android-optional-deps-aarch64
-      PREFIX: /opt/android-optional-deps-aarch64/${{ matrix.dep }}
+      BASE_PREFIX: poll/android-optional-deps-aarch64
+      PREFIX: poll/android-optional-deps-aarch64/${{ matrix.dep }}
 
     steps:
       - name: Checkout repository
@@ -33,6 +33,9 @@ jobs:
 
       - name: Install Android command-line tools
         run: |
+          mkdir -p poll
+          mkdir -p poll/android-optional-deps-aarch64
+          mdkir -p ${{ env.PREFIX }}
           mkdir -p $HOME/android/cmdline-tools
           cd $HOME/android/cmdline-tools
           curl -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
