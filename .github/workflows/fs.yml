@@ -1,3 +1,4 @@
+
 name: Build Optional CPython Dependencies Independently (Compliant Matrix, aarch64 API 35)
 
 on:
@@ -33,9 +34,6 @@ jobs:
 
       - name: Install Android command-line tools
         run: |
-          mkdir -p poll
-          mkdir -p poll/android-optional-deps-aarch64
-          mkdir -p ${{ env.PREFIX }}
           mkdir -p $HOME/android/cmdline-tools
           cd $HOME/android/cmdline-tools
           curl -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
@@ -55,18 +53,18 @@ jobs:
           echo "TOOLCHAIN_BASE=$NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64" >> $GITHUB_ENV
           echo "SYSROOT=$NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/sysroot" >> $GITHUB_ENV
 
-      - name: Prepare install base
+      - name: Prepare install directories
         run: |
           mkdir -p ${{ env.BASE_PREFIX }}
 
       - name: Build libuuid from e2fsprogs (if selected)
         if: matrix.dep == 'libuuid'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
           LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
@@ -81,11 +79,11 @@ jobs:
       - name: Build gdbm (if selected)
         if: matrix.dep == 'gdbm'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
           LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
@@ -99,11 +97,11 @@ jobs:
       - name: Build ncursesw (if selected)
         if: matrix.dep == 'ncursesw'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
           LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
@@ -119,11 +117,11 @@ jobs:
       - name: Build readline (if selected)
         if: matrix.dep == 'readline'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
           CPPFLAGS: -I${{ env.BASE_PREFIX }}/ncursesw/include -I${{ env.BASE_PREFIX }}/ncursesw/include/ncursesw --sysroot=${{ env.SYSROOT }}
           LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib --sysroot=${{ env.SYSROOT }}
           LIBS: -lncursesw -ltinfo
