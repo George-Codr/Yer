@@ -1,4 +1,3 @@
-
 name: Build Optional CPython Dependencies Independently (Compliant Matrix, aarch64 API 35)
 
 on:
@@ -47,11 +46,19 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-${{ env.API_LEVEL }}" "platform-tools" "ndk;${{ env.NDK_VERSION }}"
 
-      - name: Detect NDK paths
+      - name: Detect NDK paths and host tag
         run: |
-          echo "NDK_ROOT=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
-          echo "TOOLCHAIN_BASE=$NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64" >> $GITHUB_ENV
-          echo "SYSROOT=$NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/sysroot" >> $GITHUB_ENV
+          NDK_ROOT=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}
+          echo "NDK_ROOT=$NDK_ROOT" >> $GITHUB_ENV
+          # Detect actual prebuilt host directory (darwin-x86_64 or darwin-arm64)
+          PREBUILT_DIR=$(ls $NDK_ROOT/toolchains/llvm/prebuilt/ | head -n1)
+          echo "TOOLCHAIN_BASE=$NDK_ROOT/toolchains/llvm/prebuilt/$PREBUILT_DIR" >> $GITHUB_ENV
+          echo "SYSROOT=$NDK_ROOT/toolchains/llvm/prebuilt/$PREBUILT_DIR/sysroot" >> $GITHUB_ENV
+
+      - name: Debug toolchain path
+        run: |
+          echo "Toolchain base: ${{ env.TOOLCHAIN_BASE }}"
+          ls ${{ env.TOOLCHAIN_BASE }}/bin/ | grep clang || echo "No clang binaries found"
 
       - name: Prepare install directories
         run: |
@@ -64,9 +71,9 @@ jobs:
           CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
-          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC
+          CPPFLAGS: ""
+          LDFLAGS: ""
         run: |
           curl -L -o e2fsprogs.tar.gz https://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v1.47.3/e2fsprogs-1.47.3.tar.gz/download
           tar xzf e2fsprogs.tar.gz
@@ -83,9 +90,9 @@ jobs:
           CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
-          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC
+          CPPFLAGS: ""
+          LDFLAGS: ""
         run: |
           curl -L -o gdbm.tar.gz https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz
           tar xzf gdbm.tar.gz
@@ -101,9 +108,9 @@ jobs:
           CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
-          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC
+          CPPFLAGS: ""
+          LDFLAGS: ""
         run: |
           curl -L -o ncurses.tar.gz https://invisible-mirror.net/archives/ncurses/ncurses-6.5.tar.gz
           tar xzf ncurses.tar.gz
@@ -121,9 +128,9 @@ jobs:
           CXX: ${{ env.TOOLCHAIN_BASE }}/bin/aarch64-linux-android35-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
-          CPPFLAGS: -I${{ env.BASE_PREFIX }}/ncursesw/include -I${{ env.BASE_PREFIX }}/ncursesw/include/ncursesw --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC
+          CPPFLAGS: -I${{ env.BASE_PREFIX }}/ncursesw/include -I${{ env.BASE_PREFIX }}/ncursesw/include/ncursesw
+          LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib
           LIBS: -lncursesw -ltinfo
         run: |
           curl -L -o readline.tar.gz https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz
