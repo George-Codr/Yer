@@ -1,0 +1,175 @@
+name: Build Optional CPython Dependencies Independently (Compliant Matrix, aarch64 API 35)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'Tru'
+
+jobs:
+  build-dependency:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        dep: [libuuid, gdbm, ncursesw, readline]
+
+    env:
+      API_LEVEL: 35
+      ARCH: aarch64
+      NDK_VERSION: 29.0.14206865
+      BASE_PREFIX: /opt/android-optional-deps-aarch64
+      PREFIX: /opt/android-optional-deps-aarch64/${{ matrix.dep }}
+      TOOLCHAIN_BASE: ${{ github.workspace }}/ndk/toolchains/llvm/prebuilt/darwin-x86_64
+      SYSROOT: ${{ github.workspace }}/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android command-line tools
+        run: |
+          mkdir -p $HOME/android/cmdline-tools
+          cd $HOME/android/cmdline-tools
+          curl -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          echo "ANDROID_HOME=$HOME/android" >> $GITHUB_ENV
+          echo "$HOME/android/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Accept licenses and install SDK/NDK
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-${{ env.API_LEVEL }}" "platform-tools" "ndk;${{ env.NDK_VERSION }}"
+
+      - name: Set NDK root path
+        run: echo "NDK_ROOT=${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Build libuuid from e2fsprogs (if selected)
+        if: matrix.dep == 'libuuid'
+        env:
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
+          RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
+          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+        run: |
+          curl -L -o e2fsprogs.tar.gz https://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v1.47.3/e2fsprogs-1.47.3.tar.gz/download
+          tar xzf e2fsprogs.tar.gz
+          cd e2fsprogs-*
+          ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} --enable-libuuid --disable-shared
+          cd lib/uuid
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: Build gdbm (if selected)
+        if: matrix.dep == 'gdbm'
+        env:
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
+          RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
+          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+        run: |
+          curl -L -o gdbm.tar.gz https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz
+          tar xzf gdbm.tar.gz
+          cd gdbm-*
+          ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} --enable-libgdbm-compat --disable-shared
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: Build ncursesw (if selected)
+        if: matrix.dep == 'ncursesw'
+        env:
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
+          RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CPPFLAGS: --sysroot=${{ env.SYSROOT }}
+          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+        run: |
+          curl -L -o ncurses.tar.gz https://invisible-mirror.net/archives/ncurses/ncurses-6.5.tar.gz
+          tar xzf ncurses.tar.gz
+          cd ncurses-*
+          ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} \
+                      --with-termlib --enable-widec --without-debug --without-tests \
+                      --disable-shared --with-normal
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: Build readline (if selected)
+        if: matrix.dep == 'readline'
+        env:
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
+          RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CPPFLAGS: -I${{ env.BASE_PREFIX }}/ncursesw/include -I${{ env.BASE_PREFIX }}/ncursesw/include/ncursesw --sysroot=${{ env.SYSROOT }}
+          LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+        run: |
+          curl -L -o readline.tar.gz https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz
+          tar xzf readline.tar.gz
+          cd readline-*
+          ls ${{ env.TOOLCHAIN_BASE }}/bin/
+          ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} --with-curses --disable-shared
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: Package ${{ matrix.dep }} artifact
+        run: |
+          cd ${{ env.PREFIX }}/..
+          tar -czf $GITHUB_WORKSPACE/android-optional-${{ matrix.dep }}-aarch64-api35.tar.gz ${{ matrix.dep }}
+
+      - name: Upload ${{ matrix.dep }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-optional-${{ matrix.dep }}-aarch64-api35
+          path: android-optional-${{ matrix.dep }}-aarch64-api35.tar.gz
+
+  create-release:
+    needs: build-dependency
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all dependency artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name || 'optional-deps-matrix-latest' }}
+          release_name: Android aarch64 Optional CPython Dependencies (Compliant Matrix, API 35)
+          body: |
+            Independently built static dependencies (NDK r29, macOS 14):
+            - libuuid (e2fsprogs 1.47.3) → enables _uuid
+            - gdbm (1.26) → enables _gdbm and _dbm
+            - ncursesw (6.5) → enables _curses and _curses_panel
+            - readline (8.3) → enables readline (depends on ncurses)
+            Parallel per-dependency matrix with primitive values only.
+
+      - name: Upload all dependency assets to release
+        run: |
+          for asset in artifacts/android-optional-*-aarch64-api35/android-optional-*-aarch64-api35.tar.gz; do
+            gh release upload ${{ steps.create_release.outputs.tag_name }} "$asset" --clobber
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
