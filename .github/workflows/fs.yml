@@ -20,8 +20,6 @@ jobs:
       NDK_VERSION: 27.3.13750724
       BASE_PREFIX: /opt/android-optional-deps-aarch64
       PREFIX: /opt/android-optional-deps-aarch64/${{ matrix.dep }}
-      TOOLCHAIN_BASE: ${{ github.workspace }}/ndk/toolchains/llvm/prebuilt/darwin-x86_64
-      SYSROOT: ${{ github.workspace }}/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot
 
     steps:
       - name: Checkout repository
@@ -48,22 +46,27 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-${{ env.API_LEVEL }}" "platform-tools" "ndk;${{ env.NDK_VERSION }}"
 
-      - name: Set NDK root path
-        run: echo "NDK_ROOT=${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+      - name: Detect NDK paths
+        run: |
+          echo "NDK_ROOT=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          echo "HOST_TAG=darwin-x86_64" >> $GITHUB_ENV
+          echo "TOOLCHAIN_BASE=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/darwin-x86_64" >> $GITHUB_ENV
+          echo "SYSROOT=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot" >> $GITHUB_ENV
 
       - name: Build libuuid from e2fsprogs (if selected)
         if: matrix.dep == 'libuuid'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+          LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
           curl -L -o e2fsprogs.tar.gz https://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v1.47.3/e2fsprogs-1.47.3.tar.gz/download
           tar xzf e2fsprogs.tar.gz
+          ls ${{ env.TOOLCHAIN_BASE }}/bin || true
           cd e2fsprogs-*
           ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} --enable-libuuid --disable-shared
           cd lib/uuid
@@ -73,13 +76,13 @@ jobs:
       - name: Build gdbm (if selected)
         if: matrix.dep == 'gdbm'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+          LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
           curl -L -o gdbm.tar.gz https://ftp.gnu.org/gnu/gdbm/gdbm-1.26.tar.gz
           tar xzf gdbm.tar.gz
@@ -91,13 +94,13 @@ jobs:
       - name: Build ncursesw (if selected)
         if: matrix.dep == 'ncursesw'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
           CPPFLAGS: --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+          LDFLAGS: --sysroot=${{ env.SYSROOT }}
         run: |
           curl -L -o ncurses.tar.gz https://invisible-mirror.net/archives/ncurses/ncurses-6.5.tar.gz
           tar xzf ncurses.tar.gz
@@ -111,18 +114,18 @@ jobs:
       - name: Build readline (if selected)
         if: matrix.dep == 'readline'
         env:
-          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang
-          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}-clang++
+          CC: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang
+          CXX: ${{ env.TOOLCHAIN_BASE }}/bin/${{ env.ARCH }}-linux-android-clang++
           AR: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ar
           RANLIB: ${{ env.TOOLCHAIN_BASE }}/bin/llvm-ranlib
-          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }}
+          CFLAGS: -O3 -fPIC --sysroot=${{ env.SYSROOT }} --target=${{ env.ARCH }}-linux-android${{ env.API_LEVEL }}
           CPPFLAGS: -I${{ env.BASE_PREFIX }}/ncursesw/include -I${{ env.BASE_PREFIX }}/ncursesw/include/ncursesw --sysroot=${{ env.SYSROOT }}
-          LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib --sysroot=${{ env.SYSROOT }} -L${{ env.NDK_ROOT }}/sources/cxx-stl/llvm-libc++/libs/${{ env.ARCH }}-linux-android
+          LDFLAGS: -L${{ env.BASE_PREFIX }}/ncursesw/lib --sysroot=${{ env.SYSROOT }}
+          LIBS: -lncursesw -ltinfo  # Helps with common linking issues (tputs, etc.)
         run: |
           curl -L -o readline.tar.gz https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz
           tar xzf readline.tar.gz
           cd readline-*
-          ls ${{ env.TOOLCHAIN_BASE }}/bin/
           ./configure --host=${{ env.ARCH }}-linux-android --prefix=${{ env.PREFIX }} --with-curses --disable-shared
           make -j$(sysctl -n hw.logicalcpu)
           make install
@@ -159,7 +162,7 @@ jobs:
           tag_name: ${{ github.ref_name || 'optional-deps-matrix-latest' }}
           release_name: Android aarch64 Optional CPython Dependencies (Compliant Matrix, API 35)
           body: |
-            Independently built static dependencies (NDK r29, macOS 14):
+            Independently built static dependencies (NDK r27d build 27.3.13750724, macOS 14):
             - libuuid (e2fsprogs 1.47.3) → enables _uuid
             - gdbm (1.26) → enables _gdbm and _dbm
             - ncursesw (6.5) → enables _curses and _curses_panel
