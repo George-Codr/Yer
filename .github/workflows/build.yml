@@ -155,6 +155,10 @@ jobs:
           RANLIB: ${{ env.RANLIB }}
         run: |
           set -euxo pipefail
+          /Users/runner/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang --version
+          /Users/runner/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android34-clang --version
+          /Users/runner/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --version
+          ls /Users/runner/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/
           VERSION="${{ matrix.version }}"
           case "$VERSION" in
             3.13.11) wget https://raw.githubusercontent.com/yubrajbhoi/termux-python/fb5bad6582a83fe6db36840f47e29521083160a1/termux.patch && git apply termux.patch ;;
