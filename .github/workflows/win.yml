@@ -46,13 +46,12 @@ jobs:
       - name: Prepare portable distribution directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path python-portable -Forc
-          Copy-Item -Path Python-3.13.11\PCbuild\amd64\python.exe -Destination python-portable\
-          Copy-Item -Path Python-3.13.11\PCbuild\amd64\*.dll -Destination python-portable\
-          Copy-Item -Path Python-3.13.11\PCbuild\amd64\*.pyd -Destination python-portable\ -Recurse
-          Copy-Item -Path Python-3.13.11\Lib -Destination python-portable\Lib -Recurse
-          Copy-Item -Path Python-3.13.11\Include -Destination python-portable\Include -Recurse
-          Copy-Item -Path Python-3.13.11\DLLs -Destination python-portable\DLLs -Recurse
+          New-Item -ItemType Directory -Path python-portable -Force
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/python.exe -Destination python-portable/
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.dll -Destination python-portable/
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.pyd -Destination python-portable/ -Recurse
+          Copy-Item -Path Python-3.13.11/Lib -Destination python-portable/Lib -Recurse
+          Copy-Item -Path Python-3.13.11/Include -Destination python-portable/Include -Recurse
 
       - name: Create zip archive of the portable build
         shell: pwsh
