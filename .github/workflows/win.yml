@@ -47,12 +47,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path python-portable -Forc
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/python.exe -Destination python-portable/
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/python*.dll -Destination python-portable/
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.pyd -Destination python-portable/ -Recurse
-
-          Copy-Item -Path Python-3.13.11/Lib -Destination python-portable/Lib -Recurse
-          Copy-Item -Path Python-3.13.11/Include -Destination python-portable/Include -Recurse
+          Copy-Item -Path Python-3.13.11\PCbuild\amd64\python.exe -Destination python-portable\
+          Copy-Item -Path Python-3.13.11\PCbuild\amd64\*.dll -Destination python-portable\
+          Copy-Item -Path Python-3.13.11\PCbuild\amd64\*.pyd -Destination python-portable\ -Recurse
+          Copy-Item -Path Python-3.13.11\Lib -Destination python-portable\Lib -Recurse
+          Copy-Item -Path Python-3.13.11\Include -Destination python-portable\Include -Recurse
+          Copy-Item -Path Python-3.13.11\DLLs -Destination python-portable\DLLs -Recurse
 
       - name: Create zip archive of the portable build
         shell: pwsh
@@ -60,9 +60,9 @@ jobs:
           Compress-Archive -Path python-portable/* -DestinationPath python-3.13.11-windows-x64.zip -Force
 
       - name: Create GitHub Release and upload zip archive
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-release-asset@v1
         with:
-          tag_name: ${{ github.sha }}
+          tag_name: bvg
           name: Python 3.13.11 Windows x64 Build (${{ github.sha }})
           body: |
             Automatic build of Python 3.13.11 from source on Windows x64.
