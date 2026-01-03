@@ -1,0 +1,71 @@
+name: Build Python 3.13.11 on Windows x64 and Create Release
+
+on:
+  push:
+    branches:
+      - windows
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Python 3.13.11 source
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.13.11/Python-3.13.11.tgz" -OutFile "Python-3.13.11.tgz"
+
+      - name: Extract source archive
+        shell: pwsh
+        run: |
+          tar -xzf Python-3.13.11.tgz
+
+      - name: Set up MSVC developer command prompt (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build Python (x64 Release)
+        shell: cmd
+        run: |
+          cd Python-3.13.11\PCbuild
+          build.bat -p x64 -c Release
+
+      - name: Verify Python version
+        shell: cmd
+        run: |
+          cd Python-3.13.11\PCbuild\amd64
+          .\python.exe --version
+
+      - name: Prepare portable distribution directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path python-portable -Force
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/python.exe -Destination python-portable/
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.dll -Destination python-portable/
+          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.pyd -Destination python-portable/ -Recurse
+          Copy-Item -Path Python-3.13.11/Lib -Destination python-portable/Lib -Recurse
+          Copy-Item -Path Python-3.13.11/Include -Destination python-portable/Include -Recurse
+
+      - name: Create zip archive of the portable build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path python-portable/* -DestinationPath python-3.13.11-windows-x64.zip -Force
+          
+      - name: Create GitHub Release and upload zip archive
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v3.13.11-windows-x64
+          name: Python 3.13.11 Windows x64 Build
+          body: Automatic build of Python 3.13.11 from source on Windows x64.
+          prerelease: true
+          generate_release_notes: true
+          files: python-3.13.11-windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
