@@ -58,7 +58,7 @@ jobs:
           cd ncurses-6.4
           ./configure --host=aarch64-linux-android --prefix=$PREFIX --with-shared --without-debug --without-ada --enable-widec --without-tests
           make -j$(nproc)
-          make install
+          make install STRIPPROG=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 
       # Build readline
       - name: Build readline
@@ -68,7 +68,7 @@ jobs:
           cd readline-8.2
           ./configure --host=aarch64-linux-android --prefix=$PREFIX --with-curses
           make -j$(nproc)
-          make install
+          make install STRIPPROG=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 
       # Build gdbm (for _dbm, _gdbm)
       - name: Build gdbm
@@ -78,7 +78,7 @@ jobs:
           cd gdbm-1.23
           ./configure --host=aarch64-linux-android --prefix=$PREFIX --enable-shared
           make -j$(nproc)
-          make install
+          make install STRIPPROG=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 
       # Build portable libuuid (for _uuid)
       - name: Build libuuid
@@ -88,7 +88,7 @@ jobs:
           cd libuuid-1.0.3
           ./configure --host=aarch64-linux-android --prefix=$PREFIX --enable-static --disable-shared
           make -j$(nproc)
-          make install
+          make install STRIPPROG=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 
       # Note: _tkinter (Tk/Tcl) is NOT built – it requires a display server and is unsupported on Android.
 
