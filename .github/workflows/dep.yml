@@ -1,0 +1,125 @@
+name: Cross-Compile Dependencies for Python on Android (aarch64) & Upload as Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'Try'  # e.g., android-python-deps-v1
+
+jobs:
+  build-deps-aarch64:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      ARCH: arm64-v8a
+      API_LEVEL: 35
+      NDK_VERSION: r27c  # Current as of early 2026
+      PREFIX: $GITHUB_WORKSPACE/android-deps-aarch64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt update
+          sudo apt install -y wget unzip git patch autoconf automake libtool pkg-config build-essential
+
+      - name: Download and extract Android NDK r27c
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip
+          unzip -q android-ndk-${NDK_VERSION}-linux.zip
+          echo "NDK_ROOT=$PWD/android-ndk-${NDK_VERSION}" >> $GITHUB_ENV
+
+      - name: Setup aarch64 toolchain
+        run: |
+          export PATH=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          export CC=aarch64-linux-android${API_LEVEL}-clang
+          export CXX=aarch64-linux-android${API_LEVEL}-clang++
+          export AR=llvm-ar
+          export RANLIB=llvm-ranlib
+          export STRIP=llvm-strip
+          export CFLAGS="-fPIC --sysroot=$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          export CPPFLAGS="-I$PREFIX/include"
+          export LDFLAGS="-L$PREFIX/lib"
+          mkdir -p $PREFIX
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          echo "CC=$CC" >> $GITHUB_ENV
+          echo "CXX=$CXX" >> $GITHUB_ENV
+          echo "PREFIX=$PREFIX" >> $GITHUB_ENV
+
+      # Build ncurses (for _curses, _curses_panel, readline)
+      - name: Build ncurses
+        run: |
+          wget https://ftp.gnu.org/gnu/ncurses/ncurses-6.4.tar.gz
+          tar xzf ncurses-6.4.tar.gz
+          cd ncurses-6.4
+          ./configure --host=aarch64-linux-android --prefix=$PREFIX --with-shared --without-debug --without-ada --enable-widec --without-tests
+          make -j$(nproc)
+          make install
+
+      # Build readline
+      - name: Build readline
+        run: |
+          wget https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz
+          tar xzf readline-8.2.tar.gz
+          cd readline-8.2
+          ./configure --host=aarch64-linux-android --prefix=$PREFIX --with-curses
+          make -j$(nproc)
+          make install
+
+      # Build gdbm (for _dbm, _gdbm)
+      - name: Build gdbm
+        run: |
+          wget https://ftp.gnu.org/gnu/gdbm/gdbm-1.23.tar.gz
+          tar xzf gdbm-1.23.tar.gz
+          cd gdbm-1.23
+          ./configure --host=aarch64-linux-android --prefix=$PREFIX --enable-shared
+          make -j$(nproc)
+          make install
+
+      # Build portable libuuid (for _uuid)
+      - name: Build libuuid
+        run: |
+          wget https://sourceforge.net/projects/libuuid/files/libuuid-1.0.3.tar.gz
+          tar xzf libuuid-1.0.3.tar.gz
+          cd libuuid-1.0.3
+          ./configure --host=aarch64-linux-android --prefix=$PREFIX --enable-static --disable-shared
+          make -j$(nproc)
+          make install
+
+      # Note: _tkinter (Tk/Tcl) is NOT built – it requires a display server and is unsupported on Android.
+
+      - name: Strip and package dependencies
+        run: |
+          find $PREFIX -name "*.so" -exec $STRIP {} \;
+          cd $GITHUB_WORKSPACE
+          zip -r -9 android-python-deps-aarch64-api${API_LEVEL}.zip android-deps-aarch64
+          echo "ASSET_PATH=android-python-deps-aarch64-api${API_LEVEL}.zip" >> $GITHUB_ENV
+          du -sh $ASSET_PATH
+
+      - name: Create GitHub Release and upload asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            RELEASE_NAME="Python Dependencies for Android aarch64 (API ${API_LEVEL})"
+            gh release create "$TAG_NAME" \
+              --title "$RELEASE_NAME" \
+              --notes "Cross-compiled libraries for optional Python modules on Android arm64-v8a:  
+              - ncurses (wide-char) + readline  
+              - gdbm  
+              - libuuid  
+              _tkinter is not included (requires GUI/display, unsupported on Android).  
+              Use these with --with-tcltk-includes / --with-tcltk-libs or PKG_CONFIG_PATH when building Python." \
+              "$ASSET_PATH"
+          else
+            gh release create "android-python-deps-$(date +%Y%m%d)" \
+              --title "Python Android aarch64 Deps – $(date +%Y-%m-%d)" \
+              --notes "Draft build of dependencies." \
+              --draft \
+              "$ASSET_PATH"
+          fi
