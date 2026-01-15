@@ -132,7 +132,7 @@ jobs:
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ matrix.version }}-win-x64
+          tag_name: __win
           name: Python ${{ matrix.version }} – Windows x64 Portable
           body: |
             **Version:** ${{ matrix.version }}
