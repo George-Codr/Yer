@@ -86,24 +86,13 @@ jobs:
         run: |
           $version = "${{ matrix.version }}"
           $pkgDir = "python-$version-windows-x64-portable"
-          
           New-Item -ItemType Directory -Path $pkgDir -Force | Out-Null
-          
-          # Binaries & DLLs
           Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/python.exe"       -Destination $pkgDir/ -Force
           Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/*.dll"           -Destination $pkgDir/ -Force
           Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/*.pyd"           -Destination $pkgDir/ -Recurse -Force -ErrorAction SilentlyContinue
-          
-          # Standard library
           Copy-Item -Path "${{ matrix.source_folder }}/Lib"                           -Destination $pkgDir/Lib -Recurse -Force
-          
-          # Headers
           Copy-Item -Path "${{ matrix.source_folder }}/Include"                       -Destination $pkgDir/Include -Recurse -Force
-          
-          # Scripts folder (placeholder)
           New-Item -ItemType Directory -Path "$pkgDir\Scripts" -Force | Out-Null
-          
-          # Write README using YAML literal block (preserves newlines)
           @"
           Portable Python $version for Windows x64
           ----------------------------------------
@@ -133,9 +122,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: __win
-          name: Python ${{ matrix.version }} – Windows x64 Portable
+          name: Python – Windows x64 Portable
           body: |
-            **Version:** ${{ matrix.version }}
+            **Version:** 3.13, 3.14, 3.15
             **Platform:** Windows x64 (AMD64)
             **Build type:** Release (PCbuild/build.bat)
             **Runner:** windows-latest
