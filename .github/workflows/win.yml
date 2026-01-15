@@ -1,4 +1,4 @@
-name: Build Python 3.13.11 on Windows x64 and Create Release
+name: Build Python on Windows x64 and Create Release
 
 on:
   push:
@@ -12,60 +12,130 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: "3.13.11"
+            filename: "Python-3.13.11.tgz"
+            source_folder: "Python-3.13.11"
+            url_secret: PY313_URL
+            prerelease: false
+          - version: "3.14.2"
+            filename: "Python-3.14.2.tgz"
+            source_folder: "Python-3.14.2"
+            url_secret: PY314_URL
+            prerelease: false
+          - version: "3.15.0a5"
+            filename: "Python-3.15.0a5.tgz"
+            source_folder: "Python-3.15.0a5"
+            url_secret: PY315_URL
+            prerelease: true
+
+    name: Build Python ${{ matrix.version }} (Windows x64)
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Download Python 3.13.11 source
+      - name: Download Python ${{ matrix.version }} source from secret
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.13.11/Python-3.13.11.tgz" -OutFile "Python-3.13.11.tgz"
+          $secretName = "${{ matrix.url_secret }}"
+          $url = "${{ secrets[matrix.url_secret] }}"
+          
+          if ([string]::IsNullOrWhiteSpace($url)) {
+            Write-Error "Secret $secretName is empty or not set in repository secrets!"
+            exit 1
+          }
+          
+          Write-Host "Downloading Python ${{ matrix.version }} from: $url"
+          Invoke-WebRequest -Uri $url -OutFile "${{ matrix.filename }}" -UseBasicParsing
 
       - name: Extract source archive
         shell: pwsh
         run: |
-          tar -xzf Python-3.13.11.tgz
+          Write-Host "Extracting ${{ matrix.filename }} ..."
+          tar -xzf "${{ matrix.filename }}"
 
       - name: Set up MSVC developer command prompt (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Build Python (x64 Release)
+      - name: Build Python ${{ matrix.version }} (x64 Release)
         shell: cmd
         run: |
-          cd Python-3.13.11\PCbuild
+          cd ${{ matrix.source_folder }}\PCbuild
           build.bat -p x64 -c Release
+          if errorlevel 1 (
+            echo Build failed!
+            exit /b 1
+          )
+          echo Build completed successfully.
 
-      - name: Verify Python version
+      - name: Verify built Python version
         shell: cmd
         run: |
-          cd Python-3.13.11\PCbuild\amd64
+          cd ${{ matrix.source_folder }}\PCbuild\amd64
           .\python.exe --version
+          .\python.exe -c "import sys; print(sys.version)"
 
       - name: Prepare portable distribution directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path python-portable -Force
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/python.exe -Destination python-portable/
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.dll -Destination python-portable/
-          Copy-Item -Path Python-3.13.11/PCbuild/amd64/*.pyd -Destination python-portable/ -Recurse
-          Copy-Item -Path Python-3.13.11/Lib -Destination python-portable/Lib -Recurse
-          Copy-Item -Path Python-3.13.11/Include -Destination python-portable/Include -Recurse
+          $version = "${{ matrix.version }}"
+          $pkgDir = "python-$version-windows-x64-portable"
+          New-Item -ItemType Directory -Path $pkgDir -Force | Out-Null
+          Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/python.exe"       -Destination $pkgDir/ -Force
+          Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/*.dll"           -Destination $pkgDir/ -Force
+          Copy-Item -Path "${{ matrix.source_folder }}/PCbuild/amd64/*.pyd"           -Destination $pkgDir/ -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item -Path "${{ matrix.source_folder }}/Lib"                           -Destination $pkgDir/Lib -Recurse -Force
+          Copy-Item -Path "${{ matrix.source_folder }}/Include"                       -Destination $pkgDir/Include -Recurse -Force
+          New-Item -ItemType Directory -Path "$pkgDir\Scripts" -Force | Out-Null
+          @"
+          Portable Python $version for Windows x64
+          ----------------------------------------
+          Built from official source on GitHub Actions (windows-latest)
+          Date: $(Get-Date -Format "yyyy-MM-dd HH:mm UTC")
+          Commit: ${{ github.sha }}
 
-      - name: Create zip archive of the portable build
+          Quick start:
+            1. Extract this archive
+            2. Run python.exe (or add folder to PATH)
+            3. (Optional) Run: python -m ensurepip --upgrade
+               Then:     python -m pip install --upgrade pip
+
+          Note: This is a minimal portable build — no installer, no Start Menu entries.
+          "@ | Out-File -FilePath "$pkgDir\README.txt" -Encoding utf8
+          
+      - name: Create zip archive
         shell: pwsh
         run: |
-          Compress-Archive -Path python-portable/* -DestinationPath python-3.13.11-windows-x64.zip -Force
-          
-      - name: Create GitHub Release and upload zip archive
+          $zipName = "python-${{ matrix.version }}-windows-x64-portable.zip"
+          Write-Host "Creating $zipName ..."
+          Compress-Archive -Path "python-${{ matrix.version }}-windows-x64-portable\*" `
+                           -DestinationPath $zipName `
+                           -Force
+
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.13.11-windows-x64
-          name: Python 3.13.11 Windows x64 Build
-          body: Automatic build of Python 3.13.11 from source on Windows x64.
-          prerelease: true
-          generate_release_notes: true
-          files: python-3.13.11-windows-x64.zip
+          tag_name: __win
+          name: Python – Windows x64 Portable
+          body: |
+            **Version:** 3.13, 3.14, 3.15
+            **Platform:** Windows x64 (AMD64)
+            **Build type:** Release (PCbuild/build.bat)
+            **Runner:** windows-latest
+            **Commit:** ${{ github.sha }}
+            **Triggered:** ${{ github.event_name }}
+
+            Portable zip distribution — extract and run `python.exe` directly.
+            Built automatically from official source tarball.
+          prerelease: ${{ matrix.prerelease }}
+          generate_release_notes: false
+          files: python-${{ matrix.version }}-windows-x64-portable.zip
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
