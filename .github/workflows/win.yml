@@ -119,7 +119,7 @@ jobs:
                            -Force
 
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: __win
           name: Python – Windows x64 Portable
